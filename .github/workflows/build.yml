@@ -63,26 +63,20 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security import "$P12_FILE" -k "$KEYCHAIN" -P "$P12_PASSWORD" -f pkcs12 -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          # Self-signed test certificate: trust it only for code signing on this ephemeral runner.
-          CERT_FILE="$RUNNER_TEMP/wetype-signing.cer"
-          security find-certificate -c "WeTypeTouchBarBridge Developer" -p "$KEYCHAIN" > "$CERT_FILE"
-          test -s "$CERT_FILE"
-          security add-trusted-cert -r trustAsRoot -p codeSign -k "$KEYCHAIN" "$CERT_FILE"
+          # A self-signed leaf certificate may be usable by codesign without
+          # changing keychain trust settings. Log identities for diagnostics.
           security list-keychains -d user -s "$KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
-          echo "Imported code-signing identities:"
           security find-identity -p codesigning "$KEYCHAIN"
-          if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -qi 'WeTypeTouchBarBridge Developer'; then
-            echo "::error::The test signing certificate was imported but is not trusted as a valid code-signing identity."
-            exit 1
-          fi
-          rm -f "$P12_FILE" "$CERT_FILE"
+          rm -f "$P12_FILE"
           echo "SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
 
       - name: Sign with dedicated test identity
         shell: bash
         run: |
           set -euo pipefail
-          codesign --force --sign F8DD3BBD25899E443AFF0FA9B97A37D74B821520 \
+          # Match the tested local signing command by common name. A self-signed
+          # identity can be omitted from the valid-only SHA-1 identity lookup.
+          codesign --force --sign "WeTypeTouchBarBridge Developer" \
             --keychain "$SIGNING_KEYCHAIN" build/WeTypeTouchBarBridge.app
 
       - name: Verify architecture and signature
