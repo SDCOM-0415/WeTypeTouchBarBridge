@@ -3,76 +3,27 @@
 #import <Carbon/Carbon.h>
 #import <objc/message.h>
 #import <dlfcn.h>
-#import <ServiceManagement/ServiceManagement.h>
-
-// Colors sampled approximately from the user-provided native Chinese candidate bar screenshot.
-// The first candidate is highlighted while other candidates share a continuous dark surface.
-static NSColor *candidateColor(BOOL first) {
-    return [NSColor colorWithCalibratedRed:(first ? 0.225 : 0.143)
-                                     green:(first ? 0.303 : 0.202)
-                                      blue:(first ? 0.370 : 0.251)
-                                     alpha:1.0];
-}
-
-@interface CandidateItemView : NSScrubberTextItemView
-- (void)applyCandidateAppearanceAtIndex:(NSInteger)index;
-@end
-@implementation CandidateItemView
-- (void)applyCandidateAppearanceAtIndex:(NSInteger)index {
-    self.wantsLayer = YES;
-    self.layer.backgroundColor = candidateColor(index == 0).CGColor;
-    self.layer.cornerRadius = 0.0;
-    self.layer.masksToBounds = YES;
-}
-@end
-
-// Layout host: keeps the visible candidate group against the trailing edge of
-// the Touch Bar item, instead of leaving unused space on the right.
-// When candidate content overflows, NSScrubber takes the full available width
-// and retains its native horizontal scrolling behavior.
-@interface TrailingCandidateHost : NSView
-@property(nonatomic,strong) NSScrubber *candidateScrubber;
-@property(nonatomic,assign) CGFloat contentWidth;
-@end
-@implementation TrailingCandidateHost
-- (BOOL)isFlipped { return YES; }
-- (void)layout {
-    [super layout];
-    NSRect bounds = self.bounds;
-    CGFloat available = MAX(0, NSWidth(bounds));
-    CGFloat desired = MIN(available, MAX(0, self.contentWidth));
-    // A nonzero width avoids a zero-sized AppKit subview during transient updates.
-    CGFloat width = MAX(1, desired);
-    self.candidateScrubber.frame = NSMakeRect(MAX(0, available-width), 0,
-                                             width, NSHeight(bounds));
-}
-- (void)setContentWidth:(CGFloat)contentWidth {
-    _contentWidth = contentWidth;
-    [self setNeedsLayout:YES];
-}
-@end
 
 static NSString *const kWeTypeBundle = @"com.tencent.inputmethod.wetype";
 static NSString *const kTrayIdentifier = @"org.example.wetype-touchbar.tray";
 static NSString *const kCandidatesIdentifier = @"org.example.wetype-touchbar.candidates";
+static NSString *const kPrevIdentifier = @"org.example.wetype-touchbar.prev";
+static NSString *const kNextIdentifier = @"org.example.wetype-touchbar.next";
+static const NSUInteger kPageSize = 4;
 
-@interface Bridge : NSObject <NSApplicationDelegate, NSTouchBarDelegate, NSScrubberDataSource, NSScrubberFlowLayoutDelegate>
+@interface Bridge : NSObject <NSApplicationDelegate, NSTouchBarDelegate, NSCandidateListTouchBarItemDelegate>
 @property(nonatomic,strong) NSTouchBar *bar;
 @property(nonatomic,strong) NSTouchBar *testBar;
 @property(nonatomic,strong) NSMenuItem *diagnostic;
-@property(nonatomic,strong) NSMenuItem *loginItem;
 @property(nonatomic,assign) BOOL testing;
 @property(nonatomic,assign) BOOL hasModalAPI;
 @property(nonatomic,assign) BOOL trayRegistered;
-@property(nonatomic,strong) NSScrubber *scrubber;
-@property(nonatomic,strong) TrailingCandidateHost *candidateHost;
-@property(nonatomic,strong) NSFont *candidateFont;
-@property(nonatomic,assign) NSUInteger sampleCount;
-@property(nonatomic,assign) double sumAXms;
-@property(nonatomic,assign) double maxAXms;
-@property(nonatomic,assign) NSTimeInterval lastLogTime;
-@property(nonatomic,assign) NSUInteger pollSerial;
+@property(nonatomic,strong) NSCandidateListTouchBarItem<NSString *> *candidateItem;
 @property(nonatomic,strong) dispatch_source_t pollSource;
+@property(nonatomic,strong) NSCustomTouchBarItem *prevItem;
+@property(nonatomic,strong) NSCustomTouchBarItem *nextItem;
+@property(nonatomic,assign) NSUInteger pageIndex;
+@property(nonatomic,assign) NSUInteger lastVisibleStart;
 @property(nonatomic,assign) NSTimeInterval lastCandidateUpdate;
 @property(nonatomic,strong) NSStatusItem *status;
 @property(nonatomic,strong) NSArray<NSString *> *currentWords;
@@ -126,7 +77,7 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     self.currentWords = @[];
     self.currentKeys = @[];
     self.status = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
-    self.status.button.title = @"候8";
+    self.status.button.title = @"候";
     NSMenu *menu = [NSMenu new];
     NSMenuItem *toggle = [[NSMenuItem alloc] initWithTitle:@"暂停读取候选词" action:@selector(toggle:) keyEquivalent:@""];
     toggle.target = self;
@@ -138,42 +89,30 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     self.diagnostic.enabled = NO;
     [menu addItem:self.diagnostic];
     [menu addItem:[NSMenuItem separatorItem]];
-    self.loginItem = [[NSMenuItem alloc] initWithTitle:@"登录时启动" action:@selector(toggleLoginAtStartup:) keyEquivalent:@""];
-    self.loginItem.target = self;
-    [menu addItem:self.loginItem];
-    NSMenuItem *loginSettings = [[NSMenuItem alloc] initWithTitle:@"打开登录项设置…" action:@selector(openLoginSettings:) keyEquivalent:@""];
-    loginSettings.target = self;
-    [menu addItem:loginSettings];
-    [self updateLoginItemState];
-    [menu addItem:[NSMenuItem separatorItem]];
     NSMenuItem *quit = [[NSMenuItem alloc] initWithTitle:@"退出" action:@selector(quit:) keyEquivalent:@""];
     quit.target = self;
     [menu addItem:quit];
     self.status.menu = menu;
-    self.lastLogTime = NSProcessInfo.processInfo.systemUptime;
-    NSLog(@"[Perf] v0.8 started; use log stream to view [Perf] lines");
 
-    self.candidateFont = [NSFont systemFontOfSize:15 weight:NSFontWeightRegular];
-    self.scrubber = [[NSScrubber alloc] initWithFrame:NSMakeRect(0, 0, 560, 36)];
-    self.scrubber.wantsLayer = YES;
-    self.scrubber.layer.backgroundColor = candidateColor(NO).CGColor;
-    self.scrubber.layer.cornerRadius = 9.0;
-    self.scrubber.layer.masksToBounds = YES;
-    self.scrubber.scrubberLayout = [NSScrubberFlowLayout new];
-    self.scrubber.dataSource = self;
-    self.scrubber.delegate = self;
-    self.scrubber.mode = NSScrubberModeFixed;
-    self.scrubber.continuous = NO;
-    [self.scrubber registerClass:CandidateItemView.class forItemIdentifier:@"candidateCell"];
-    self.candidateHost = [[TrailingCandidateHost alloc] initWithFrame:NSMakeRect(0, 0, 560, 36)];
-    self.candidateHost.candidateScrubber = self.scrubber;
-    self.candidateHost.contentWidth = 1;
-    [self.candidateHost addSubview:self.scrubber];
-    NSCustomTouchBarItem *candidateControl = [[NSCustomTouchBarItem alloc] initWithIdentifier:kCandidatesIdentifier];
-    candidateControl.view = self.candidateHost;
+    self.candidateItem = [[NSCandidateListTouchBarItem alloc] initWithIdentifier:kCandidatesIdentifier];
+    self.candidateItem.delegate = self;
+    self.candidateItem.allowsTextInputContextCandidates = NO;
+    self.candidateItem.allowsCollapsing = NO;
+    self.candidateItem.attributedStringForCandidate = ^NSAttributedString *(NSString *candidate, NSInteger index) {
+        (void)index;
+        return [[NSAttributedString alloc] initWithString:candidate attributes:@{
+            NSFontAttributeName: [NSFont systemFontOfSize:15 weight:NSFontWeightRegular],
+            NSForegroundColorAttributeName: NSColor.labelColor
+        }];
+    };
+    self.prevItem = [[NSCustomTouchBarItem alloc] initWithIdentifier:kPrevIdentifier];
+    self.prevItem.view = [NSButton buttonWithTitle:@"‹" target:self action:@selector(previousPage:)];
+    self.nextItem = [[NSCustomTouchBarItem alloc] initWithIdentifier:kNextIdentifier];
+    self.nextItem.view = [NSButton buttonWithTitle:@"›" target:self action:@selector(nextPage:)];
     self.bar = [NSTouchBar new];
-    self.bar.defaultItemIdentifiers = @[kCandidatesIdentifier];
-    self.bar.templateItems = [NSSet setWithObject:candidateControl];
+    self.bar.defaultItemIdentifiers = @[kPrevIdentifier, kCandidatesIdentifier, kNextIdentifier];
+    self.bar.delegate = self;
+    self.bar.templateItems = [NSSet setWithObjects:self.prevItem, self.candidateItem, self.nextItem, nil];
     self.testBar = [NSTouchBar new];
     NSCustomTouchBarItem *testItem = [[NSCustomTouchBarItem alloc] initWithIdentifier:@"org.example.wetype-touchbar.test"];
     testItem.view = [NSButton buttonWithTitle:@"WeType Bridge: Touch Bar OK" target:self action:@selector(stopTest:)];
@@ -219,51 +158,12 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
 
 - (NSTouchBarItem *)touchBar:(NSTouchBar *)touchBar makeItemForIdentifier:(NSTouchBarItemIdentifier)identifier {
     (void)touchBar;
-    if ([identifier isEqualToString:kCandidatesIdentifier]) return [self.bar.templateItems anyObject];
+    if ([identifier isEqualToString:kCandidatesIdentifier]) return self.candidateItem;
+    if ([identifier isEqualToString:kPrevIdentifier]) return self.prevItem;
+    if ([identifier isEqualToString:kNextIdentifier]) return self.nextItem;
     return nil;
 }
 
-// macOS 13+ managed login item: request registration only on explicit menu action.
-// The system controls approval in System Settings; never silently bypass it.
-- (void)updateLoginItemState {
-    if (@available(macOS 13.0, *)) {
-        SMAppServiceStatus state = [SMAppService mainAppService].status;
-        self.loginItem.state = (state == SMAppServiceStatusEnabled) ? NSControlStateValueOn : NSControlStateValueOff;
-        if (state == SMAppServiceStatusRequiresApproval)
-            self.loginItem.title = @"登录时启动（等待系统批准）";
-        else
-            self.loginItem.title = @"登录时启动";
-    } else {
-        self.loginItem.enabled = NO;
-        self.loginItem.title = @"登录时启动（需 macOS 13+）";
-    }
-}
-- (void)toggleLoginAtStartup:(id)sender {
-    (void)sender;
-    if (@available(macOS 13.0, *)) {
-        SMAppService *service = [SMAppService mainAppService];
-        NSError *error = nil;
-        BOOL success = NO;
-        if (service.status == SMAppServiceStatusEnabled || service.status == SMAppServiceStatusRequiresApproval)
-            success = [service unregisterAndReturnError:&error];
-        else
-            success = [service registerAndReturnError:&error];
-        [self updateLoginItemState];
-        if (!success) {
-            [self showInfo:@"登录时启动设置失败"
-                     text:[NSString stringWithFormat:@"%@\n\n请前往「系统设置 → 通用 → 登录项与扩展」检查权限。", error.localizedDescription ?: @"未知错误"]];
-        } else if (service.status == SMAppServiceStatusRequiresApproval) {
-            [self showInfo:@"等待系统批准"
-                     text:@"已向 macOS 请求登录时启动。请前往「系统设置 → 通用 → 登录项与扩展」批准本程序；是否批准由系统和用户决定。"];
-        }
-    }
-}
-- (void)openLoginSettings:(id)sender {
-    (void)sender;
-    if (@available(macOS 13.0, *)) {
-        [SMAppService openSystemSettingsLoginItems];
-    }
-}
 - (void)updateDiagnosticMessage:(NSString *)message {
     self.diagnostic.title = [@"状态：" stringByAppendingString:message];
 }
@@ -303,7 +203,6 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
         dispatch_async(dispatch_get_main_queue(), ^{ [self updateDiagnosticMessage:@"缺少辅助功能授权"]; });
         return;
     }
-    const NSTimeInterval t0 = NSProcessInfo.processInfo.systemUptime;
     pid_t pid = wetypePID();
     if (pid == 0) { dispatch_async(dispatch_get_main_queue(), ^{ [self updateDiagnosticMessage:@"未找到 WeType 进程"]; [self updateWithWords:@[] keys:@[]]; }); return; }
     AXUIElementRef app = AXUIElementCreateApplication(pid);
@@ -333,52 +232,43 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
         i++;
     }
     if (keys.count == 0 || keys.firstObject.integerValue != 1) {
-        [words removeAllObjects];
-        [keys removeAllObjects];
+        dispatch_async(dispatch_get_main_queue(), ^{ [self updateWithWords:@[] keys:@[]]; }); return;
     }
-    const NSTimeInterval t1 = NSProcessInfo.processInfo.systemUptime;
-    double axms = (t1 - t0) * 1000.0;
     NSArray<NSString *> *snapshotWords = [words copy];
     NSArray<NSNumber *> *snapshotKeys = [keys copy];
     dispatch_async(dispatch_get_main_queue(), ^{
-        const NSTimeInterval t2 = NSProcessInfo.processInfo.systemUptime;
-        double queuems = (t2 - t1) * 1000.0;
+        [self updateDiagnosticMessage:[NSString stringWithFormat:@"PID %d，%lu 个候选；第 %lu 页",pid,
+           (unsigned long)snapshotWords.count, (unsigned long)(self.pageIndex + 1)]];
         self.lastCandidateUpdate = [NSDate timeIntervalSinceReferenceDate];
-        BOOL changed = ![self.currentWords isEqualToArray:snapshotWords] || ![self.currentKeys isEqualToArray:snapshotKeys];
-        if (changed) {
-            [self updateDiagnosticMessage:[NSString stringWithFormat:@"v0.8 · %lu 候选 · AX %.1fms",(unsigned long)snapshotWords.count,axms]];
-        }
-        const NSTimeInterval uiStart = NSProcessInfo.processInfo.systemUptime;
         [self updateWithWords:snapshotWords keys:snapshotKeys];
-        double uims = (NSProcessInfo.processInfo.systemUptime - uiStart) * 1000.0;
-        self.sampleCount++;
-        self.sumAXms += axms;
-        self.maxAXms = MAX(self.maxAXms, axms);
-        if (changed) NSLog(@"[Perf] CHANGE count=%lu AX=%.2fms queue=%.2fms UI=%.2fms",(unsigned long)snapshotWords.count,axms,queuems,uims);
-        NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
-        if (now - self.lastLogTime > 10.0 && self.sampleCount) {
-            NSLog(@"[Perf] 10s samples=%lu AX-mean=%.2fms AX-max=%.2fms",(unsigned long)self.sampleCount,self.sumAXms/self.sampleCount,self.maxAXms);
-            self.sampleCount = 0; self.sumAXms = 0; self.maxAXms = 0; self.lastLogTime = now;
-        }
     });
 }
 
 - (void)updateWithWords:(NSArray<NSString *> *)words keys:(NSArray<NSNumber *> *)keys {
     if ([self.currentWords isEqualToArray:words] && [self.currentKeys isEqualToArray:keys]) return;
     self.currentWords = [words copy]; self.currentKeys = [keys copy];
+    self.pageIndex = 0; // New composition: start with the highest-ranked candidates.
+    self.lastCandidateUpdate = [NSDate timeIntervalSinceReferenceDate];
     if (words.count == 0) { if (!self.testing) [self dismissBar]; return; }
-    // Match NSScrubberFlowLayout widths exactly so the whole group can be
-    // aligned to the right, leaving unused space on the LEFT (native style).
-    CGFloat width = 0;
-    for (NSString *word in words) {
-        CGFloat glyphWidth = [word sizeWithAttributes:@{NSFontAttributeName:self.candidateFont}].width;
-        width += MIN(270.0, MAX(44.0, ceil(glyphWidth) + 26.0));
-    }
-    self.candidateHost.contentWidth = width + 2.0;
-    [self.candidateHost layoutSubtreeIfNeeded];
-    [self.scrubber reloadData];
-    [self.scrubber.scrubberLayout invalidateLayout];
+    [self renderPage];
     if (!self.testing) [self presentBar];
+}
+
+- (void)renderPage {
+    NSUInteger count = self.currentWords.count;
+    NSUInteger pages = MAX((NSUInteger)1, (count + kPageSize - 1) / kPageSize);
+    if (self.pageIndex >= pages) self.pageIndex = pages - 1;
+    NSUInteger start = self.pageIndex * kPageSize;
+    self.lastVisibleStart = start;
+    NSArray *visible = count > start ? [self.currentWords subarrayWithRange:NSMakeRange(start, MIN(kPageSize, count-start))] : @[];
+    [self.candidateItem setCandidates:visible forSelectedRange:NSMakeRange(0, 0) inString:nil];
+    self.prevItem.view.hidden = self.pageIndex == 0;
+    self.nextItem.view.hidden = self.pageIndex + 1 >= pages;
+}
+- (void)previousPage:(id)sender { (void)sender; if (self.pageIndex > 0) { self.pageIndex--; [self renderPage]; } }
+- (void)nextPage:(id)sender {
+    (void)sender;
+    if ((self.pageIndex + 1) * kPageSize < self.currentWords.count) { self.pageIndex++; [self renderPage]; }
 }
 
 - (void)presentBar {
@@ -409,38 +299,21 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     self.presented = NO;
 }
 
-// Variable-width candidates, using glyph measurement (not character count).
-- (NSInteger)numberOfItemsForScrubber:(NSScrubber *)scrubber {
-    (void)scrubber;
-    return (NSInteger)self.currentWords.count;
-}
-- (NSScrubberItemView *)scrubber:(NSScrubber *)scrubber viewForItemAtIndex:(NSInteger)index {
-    CandidateItemView *view = [scrubber makeItemWithIdentifier:@"candidateCell" owner:self];
-    if (index >= 0 && index < (NSInteger)self.currentWords.count) {
-        view.title = self.currentWords[index];
-        // NSScrubber recycles its cells: style every time a cell is configured.
-        [view applyCandidateAppearanceAtIndex:index];
-    }
-    return view;
-}
-- (NSSize)scrubber:(NSScrubber *)scrubber layout:(NSScrubberFlowLayout *)layout sizeForItemAtIndex:(NSInteger)index {
-    (void)scrubber; (void)layout;
-    if (index < 0 || index >= (NSInteger)self.currentWords.count) return NSMakeSize(44,36);
-    NSString *word = self.currentWords[index];
-    CGFloat glyphWidth = [word sizeWithAttributes:@{NSFontAttributeName:self.candidateFont}].width;
-    // minimum hit target, horizontal breathing room; long phrases cap to allow scrolling.
-    return NSMakeSize(MIN(270.0, MAX(44.0, ceil(glyphWidth) + 26.0)), 36);
-}
-- (void)scrubber:(NSScrubber *)scrubber didSelectItemAtIndex:(NSInteger)index {
-    (void)scrubber;
-    if (index < 0 || index >= (NSInteger)self.currentKeys.count || !AXIsProcessTrusted()) return;
-    if ([NSDate timeIntervalSinceReferenceDate] - self.lastCandidateUpdate > 0.8) return;
+- (void)candidateListTouchBarItem:(NSCandidateListTouchBarItem *)item beginSelectingCandidateAtIndex:(NSInteger)index { (void)item; (void)index; }
+- (void)candidateListTouchBarItem:(NSCandidateListTouchBarItem *)item changeSelectionFromCandidateAtIndex:(NSInteger)fromIndex toIndex:(NSInteger)toIndex { (void)item; (void)fromIndex; (void)toIndex; }
+- (void)candidateListTouchBarItem:(NSCandidateListTouchBarItem *)item endSelectingCandidateAtIndex:(NSInteger)index {
+    (void)item;
+    NSInteger absoluteIndex = index + (NSInteger)self.lastVisibleStart;
+    if (index < 0 || absoluteIndex >= (NSInteger)self.currentKeys.count || !AXIsProcessTrusted()) return;
+    if ([NSDate timeIntervalSinceReferenceDate] - self.lastCandidateUpdate > 1.5) return;
+    // Fail closed if WeType is not the active input source.
     TISInputSourceRef source = TISCopyCurrentKeyboardInputSource();
-    NSString *sourceID = source ? [(__bridge NSString *)TISGetInputSourceProperty(source, kTISPropertyInputSourceID) copy] : nil;
+    NSString *sourceID = source ? (__bridge NSString *)TISGetInputSourceProperty(source, kTISPropertyInputSourceID) : nil;
+    sourceID = [sourceID copy];
     if (source) CFRelease(source);
     if (![sourceID isEqualToString:@"com.tencent.inputmethod.wetype.pinyin"]) return;
-    int digit = self.currentKeys[index].intValue;
-    if (digit < 1 || digit > 9) return;
+    int digit = self.currentKeys[absoluteIndex].intValue;
+    // ANSI number row 1-9; press only after a user touches a candidate.
     const CGKeyCode keycodes[] = {0,18,19,20,21,23,22,26,28,25};
     CGKeyCode key = keycodes[digit];
     CGEventRef down = CGEventCreateKeyboardEvent(NULL, key, true);
