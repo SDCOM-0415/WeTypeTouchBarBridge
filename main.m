@@ -3,7 +3,6 @@
 #import <Carbon/Carbon.h>
 #import <objc/message.h>
 #import <dlfcn.h>
-#import <ServiceManagement/ServiceManagement.h>
 
 // Colors sampled approximately from the user-provided native Chinese candidate bar screenshot.
 // The first candidate is highlighted while other candidates share a continuous dark surface.
@@ -60,7 +59,6 @@ static NSString *const kCandidatesIdentifier = @"org.example.wetype-touchbar.can
 @property(nonatomic,strong) NSTouchBar *bar;
 @property(nonatomic,strong) NSTouchBar *testBar;
 @property(nonatomic,strong) NSMenuItem *diagnostic;
-@property(nonatomic,strong) NSMenuItem *loginItem;
 @property(nonatomic,assign) BOOL testing;
 @property(nonatomic,assign) BOOL hasModalAPI;
 @property(nonatomic,assign) BOOL trayRegistered;
@@ -126,7 +124,7 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     self.currentWords = @[];
     self.currentKeys = @[];
     self.status = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
-    self.status.button.title = @"候8";
+    self.status.button.title = @"候7";
     NSMenu *menu = [NSMenu new];
     NSMenuItem *toggle = [[NSMenuItem alloc] initWithTitle:@"暂停读取候选词" action:@selector(toggle:) keyEquivalent:@""];
     toggle.target = self;
@@ -138,20 +136,12 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     self.diagnostic.enabled = NO;
     [menu addItem:self.diagnostic];
     [menu addItem:[NSMenuItem separatorItem]];
-    self.loginItem = [[NSMenuItem alloc] initWithTitle:@"登录时启动" action:@selector(toggleLoginAtStartup:) keyEquivalent:@""];
-    self.loginItem.target = self;
-    [menu addItem:self.loginItem];
-    NSMenuItem *loginSettings = [[NSMenuItem alloc] initWithTitle:@"打开登录项设置…" action:@selector(openLoginSettings:) keyEquivalent:@""];
-    loginSettings.target = self;
-    [menu addItem:loginSettings];
-    [self updateLoginItemState];
-    [menu addItem:[NSMenuItem separatorItem]];
     NSMenuItem *quit = [[NSMenuItem alloc] initWithTitle:@"退出" action:@selector(quit:) keyEquivalent:@""];
     quit.target = self;
     [menu addItem:quit];
     self.status.menu = menu;
     self.lastLogTime = NSProcessInfo.processInfo.systemUptime;
-    NSLog(@"[Perf] v0.8 started; use log stream to view [Perf] lines");
+    NSLog(@"[Perf] v0.7 started; use log stream to view [Perf] lines");
 
     self.candidateFont = [NSFont systemFontOfSize:15 weight:NSFontWeightRegular];
     self.scrubber = [[NSScrubber alloc] initWithFrame:NSMakeRect(0, 0, 560, 36)];
@@ -223,47 +213,6 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     return nil;
 }
 
-// macOS 13+ managed login item: request registration only on explicit menu action.
-// The system controls approval in System Settings; never silently bypass it.
-- (void)updateLoginItemState {
-    if (@available(macOS 13.0, *)) {
-        SMAppServiceStatus state = [SMAppService mainAppService].status;
-        self.loginItem.state = (state == SMAppServiceStatusEnabled) ? NSControlStateValueOn : NSControlStateValueOff;
-        if (state == SMAppServiceStatusRequiresApproval)
-            self.loginItem.title = @"登录时启动（等待系统批准）";
-        else
-            self.loginItem.title = @"登录时启动";
-    } else {
-        self.loginItem.enabled = NO;
-        self.loginItem.title = @"登录时启动（需 macOS 13+）";
-    }
-}
-- (void)toggleLoginAtStartup:(id)sender {
-    (void)sender;
-    if (@available(macOS 13.0, *)) {
-        SMAppService *service = [SMAppService mainAppService];
-        NSError *error = nil;
-        BOOL success = NO;
-        if (service.status == SMAppServiceStatusEnabled || service.status == SMAppServiceStatusRequiresApproval)
-            success = [service unregisterAndReturnError:&error];
-        else
-            success = [service registerAndReturnError:&error];
-        [self updateLoginItemState];
-        if (!success) {
-            [self showInfo:@"登录时启动设置失败"
-                     text:[NSString stringWithFormat:@"%@\n\n请前往「系统设置 → 通用 → 登录项与扩展」检查权限。", error.localizedDescription ?: @"未知错误"]];
-        } else if (service.status == SMAppServiceStatusRequiresApproval) {
-            [self showInfo:@"等待系统批准"
-                     text:@"已向 macOS 请求登录时启动。请前往「系统设置 → 通用 → 登录项与扩展」批准本程序；是否批准由系统和用户决定。"];
-        }
-    }
-}
-- (void)openLoginSettings:(id)sender {
-    (void)sender;
-    if (@available(macOS 13.0, *)) {
-        [SMAppService openSystemSettingsLoginItems];
-    }
-}
 - (void)updateDiagnosticMessage:(NSString *)message {
     self.diagnostic.title = [@"状态：" stringByAppendingString:message];
 }
@@ -346,7 +295,7 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
         self.lastCandidateUpdate = [NSDate timeIntervalSinceReferenceDate];
         BOOL changed = ![self.currentWords isEqualToArray:snapshotWords] || ![self.currentKeys isEqualToArray:snapshotKeys];
         if (changed) {
-            [self updateDiagnosticMessage:[NSString stringWithFormat:@"v0.8 · %lu 候选 · AX %.1fms",(unsigned long)snapshotWords.count,axms]];
+            [self updateDiagnosticMessage:[NSString stringWithFormat:@"v0.7 · %lu 候选 · AX %.1fms",(unsigned long)snapshotWords.count,axms]];
         }
         const NSTimeInterval uiStart = NSProcessInfo.processInfo.systemUptime;
         [self updateWithWords:snapshotWords keys:snapshotKeys];
