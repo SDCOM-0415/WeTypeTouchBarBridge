@@ -44,7 +44,7 @@ jobs:
           APP="build/WeTypeTouchBarBridge.app"
           BIN="$APP/Contents/MacOS/WeTypeTouchBarBridge"
           lipo -info "$BIN"
-          lipo -verify_arch x86_64 arm64 "$BIN"
+          lipo "$BIN" -verify_arch x86_64 arm64
           codesign --verify --deep --strict --verbose=2 "$APP"
 
       - name: Package application
