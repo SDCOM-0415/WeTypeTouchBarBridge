@@ -63,7 +63,19 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN"
           security import "$P12_FILE" -k "$KEYCHAIN" -P "$P12_PASSWORD" -f pkcs12 -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          rm -f "$P12_FILE"
+          # Self-signed test certificate: trust it only for code signing on this ephemeral runner.
+          CERT_FILE="$RUNNER_TEMP/wetype-signing.cer"
+          security find-certificate -c "WeTypeTouchBarBridge Developer" -p "$KEYCHAIN" > "$CERT_FILE"
+          test -s "$CERT_FILE"
+          security add-trusted-cert -r trustAsRoot -p codeSign -k "$KEYCHAIN" "$CERT_FILE"
+          security list-keychains -d user -s "$KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
+          echo "Imported code-signing identities:"
+          security find-identity -p codesigning "$KEYCHAIN"
+          if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -qi 'WeTypeTouchBarBridge Developer'; then
+            echo "::error::The test signing certificate was imported but is not trusted as a valid code-signing identity."
+            exit 1
+          fi
+          rm -f "$P12_FILE" "$CERT_FILE"
           echo "SIGNING_KEYCHAIN=$KEYCHAIN" >> "$GITHUB_ENV"
 
       - name: Sign with dedicated test identity
@@ -86,7 +98,7 @@ jobs:
           test "$ACTUAL_ARCHS" = "$TARGET_ARCH"
           codesign --verify --deep --strict --verbose=2 "$APP"
           REQUIREMENT="$(codesign -dr - "$APP" 2>&1)"
-          printf "%s\\n" "$REQUIREMENT"
+          printf "%s\n" "$REQUIREMENT"
           [[ "$REQUIREMENT" == *'certificate root = H"f8dd3bbd25899e443aff0fa9b97a37d74b821520"'* ]]
 
       - name: Package
