@@ -33,8 +33,29 @@
 - 带实体 Touch Bar 的 MacBook Pro（目前在 2018 款 Intel 机型上验证）。
 - macOS Sequoia 已实测；其他系统版本需要自行验证。
 - 已安装并启用微信输入法（WeType），已知输入源标识：`com.tencent.inputmethod.wetype.pinyin`。
-- Xcode Command Line Tools（无需安装完整 Xcode）。
+- 从源码编译需要 Xcode Command Line Tools（无需安装完整 Xcode）；直接下载 Actions 构建包则不需要。
 - 在「系统设置 → 隐私与安全性 → 辅助功能」中授权本程序。
+
+## 下载预编译版本（GitHub Actions）
+
+项目已经支持通过 GitHub Actions **分别构建 Intel 和 Apple Silicon 两种架构**，无需在自己的 Mac 上安装开发工具即可下载构建产物。
+
+| 设备架构 | 构建包名 | 适用设备 |
+| --- | --- | --- |
+| Intel（x86_64） | `WeTypeTouchBarBridge-x86_64.zip` | Intel MacBook Pro Touch Bar |
+| Apple Silicon（arm64） | `WeTypeTouchBarBridge-arm64.zip` | M 系列 MacBook Pro Touch Bar |
+
+**下载方法：**
+
+1. 打开 [GitHub Actions 构建页面](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/actions/workflows/build.yml)。
+2. 选择一次状态为 **Success** 的 `Build macOS (x86_64 / arm64)` 运行记录。
+3. 在页面下方 **Artifacts** 下载与你设备架构对应的 ZIP。
+4. 解压得到 `WeTypeTouchBarBridge.app`，建议放入 `/Applications` 后启动。
+5. 在系统设置中授予必要的**辅助功能**权限；如需自启动，打开菜单栏「候8」中的「登录时启动」。
+
+构建工作流使用 `macos-latest`，支持手动运行和推送 `v*` 标签时自动构建。**Actions Artifact 不是 GitHub Release 附件**，且其保留期限有限；下载 Artifact 可能需要登录 GitHub。
+
+**重要：** 当前 ZIP 使用 ad-hoc 签名，未进行 Apple Developer ID 签名及公证，macOS 可能拦截启动。下载前请核对仓库源码及构建日志；不建议全局关闭 Gatekeeper。arm64 目前仅验证了 Actions 编译成功，Touch Bar 实际功能尚未经过 Apple Silicon 机型测试。
 
 ## 编译与启动
 
@@ -115,7 +136,7 @@ build/WeTypeTouchBarBridge.app
 - 依赖微信输入法辅助功能树的结构和候选编号，微信输入法升级后可能需要适配。
 - 触摸选词通过模拟数字键完成，不保证兼容所有输入场景。
 - 辅助功能权限可能读取到正在输入的文字，请仅在信任本项目源码时授权，分享诊断日志前请检查隐私内容。
-- 目前主要是个人实机验证项目，没有提供通用、公证过的二进制安装包。
+- 当前提供 Actions 生成的 x86_64 / arm64 构建包，但它们未经过 Apple 公证，也未做广泛机型验证。
 - 候选栏是对 Apple 原生体验的复刻，并非系统自带输入法内部组件。
 
 ## 项目文件
@@ -125,6 +146,7 @@ build/WeTypeTouchBarBridge.app
 | `main.m` | Objective-C / AppKit 主程序 |
 | `build.sh` | 一键构建与签名脚本 |
 | `Info.plist` | 应用包配置 |
+| `.github/workflows/build.yml` | 双架构 GitHub Actions 自动构建工作流 |
 | `docs/` | 实际运行截图 |
 | `LICENSE` | MIT 开源许可证 |
 
