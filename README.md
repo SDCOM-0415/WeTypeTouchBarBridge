@@ -40,7 +40,7 @@
 
 ## 下载与安装（GitHub Releases）
 
-**v1.0 正式版已发布！** 正式版本请优先前往 [GitHub Releases（最新版）](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases/latest)，也可以在 [全部 Releases](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases) 查看历史发布记录和更新说明。
+**v1.0 已完成源码版本准备，正式发布后请前往** [GitHub Releases（最新版）](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases/latest)，也可以在 [全部 Releases](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases) 查看历史发布记录和更新说明。
 
 | 设备架构 | 预期安装包名称 | 适用设备 |
 | --- | --- | --- |
@@ -93,7 +93,7 @@ build/WeTypeTouchBarBridge.app
 
 菜单栏出现「候1」表示辅助程序已启动。使用微信输入法输入拼音时，Touch Bar 会显示候选词。
 
-### 安装位置选择（v1.0 起支持）
+### 安装位置选择（v0.8 起支持）
 
 执行 `./build.sh` 后，脚本会交互式询问安装目标：
 
@@ -107,7 +107,7 @@ build/WeTypeTouchBarBridge.app
 
 建议选择 `/Applications`，避免移动已登记登录项的 App。已存在的同名应用仅在其 Bundle Identifier 与本项目一致时才会被替换；修改安装位置后应重新检查辅助功能及登录项授权。
 
-### 登录时自动启动（v1.0 起支持）
+### 登录时自动启动（v0.8 起支持）
 
 在菜单栏点击「候1」→「登录时启动」，程序使用 macOS 13+ 提供的 `SMAppService.mainAppService` 申请将当前 App 注册为登录项。
 
