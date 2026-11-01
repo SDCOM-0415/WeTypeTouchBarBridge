@@ -1,0 +1,62 @@
+name: Build macOS Universal 2
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Universal 2 (x86_64 + arm64)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Compile application for both architectures
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="build/WeTypeTouchBarBridge.app"
+          BIN="$APP/Contents/MacOS/WeTypeTouchBarBridge"
+          mkdir -p "$APP/Contents/MacOS"
+
+          xcrun clang -arch x86_64 -arch arm64 \
+            -fobjc-arc -fmodules -mmacosx-version-min=13.0 \
+            -O2 -Wall -Wextra \
+            -framework Cocoa \
+            -framework ApplicationServices \
+            -framework Carbon \
+            -framework ServiceManagement \
+            main.m -o "$BIN"
+
+          cp Info.plist "$APP/Contents/Info.plist"
+          codesign --force --sign - "$APP"
+
+      - name: Verify architecture and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="build/WeTypeTouchBarBridge.app"
+          BIN="$APP/Contents/MacOS/WeTypeTouchBarBridge"
+          lipo -info "$BIN"
+          lipo -verify_arch x86_64 arm64 "$BIN"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Package application
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd build
+          ditto -c -k --keepParent WeTypeTouchBarBridge.app WeTypeTouchBarBridge-Universal2.zip
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeTypeTouchBarBridge-Universal2
+          path: build/WeTypeTouchBarBridge-Universal2.zip
+          if-no-files-found: error
