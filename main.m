@@ -15,12 +15,14 @@ static NSColor *candidateColor(BOOL first) {
 }
 
 @interface CandidateItemView : NSScrubberTextItemView
-- (void)applyCandidateAppearanceAtIndex:(NSInteger)index;
+- (void)applyCandidateAppearanceAtIndex:(NSInteger)index pressed:(BOOL)pressed;
 @end
 @implementation CandidateItemView
-- (void)applyCandidateAppearanceAtIndex:(NSInteger)index {
+- (void)applyCandidateAppearanceAtIndex:(NSInteger)index pressed:(BOOL)pressed {
     self.wantsLayer = YES;
-    self.layer.backgroundColor = candidateColor(index == 0).CGColor;
+    self.layer.backgroundColor = (pressed
+        ? [NSColor colorWithCalibratedRed:0.32 green:0.43 blue:0.51 alpha:1.0]
+        : candidateColor(index == 0)).CGColor;
     self.layer.cornerRadius = 0.0;
     self.layer.masksToBounds = YES;
 }
@@ -80,6 +82,7 @@ static NSString *const kCandidatesIdentifier = @"org.example.wetype-touchbar.can
 @property(nonatomic,assign) BOOL presented;
 @property(nonatomic,assign) BOOL enabled;
 @property(nonatomic,assign) pid_t lastPID;
+@property(nonatomic,assign) NSInteger pressedCandidateIndex;
 @end
 
 @implementation Bridge
@@ -153,6 +156,7 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     self.lastLogTime = NSProcessInfo.processInfo.systemUptime;
     NSLog(@"[Perf] v0.8 started; use log stream to view [Perf] lines");
 
+    self.pressedCandidateIndex = NSNotFound;
     self.candidateFont = [NSFont systemFontOfSize:15 weight:NSFontWeightRegular];
     self.scrubber = [[NSScrubber alloc] initWithFrame:NSMakeRect(0, 0, 560, 36)];
     self.scrubber.wantsLayer = YES;
@@ -164,10 +168,10 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     self.scrubber.delegate = self;
     self.scrubber.mode = NSScrubberModeFixed;
     self.scrubber.continuous = NO;
-    // Let NSScrubber draw native pressed/selected feedback for non-first candidates.
-    // The first candidate keeps its own static highlight; these decorations follow the actual touch.
-    self.scrubber.selectionBackgroundStyle = [NSScrubberSelectionStyle roundedBackgroundStyle];
-    self.scrubber.floatsSelectionViews = YES;
+    // Drive transient touch feedback from highlight callbacks instead of selection,
+    // because input method candidates disappear quickly once selection commits.
+    self.scrubber.selectionBackgroundStyle = nil;
+    self.scrubber.selectionOverlayStyle = nil;
     [self.scrubber registerClass:CandidateItemView.class forItemIdentifier:@"candidateCell"];
     self.candidateHost = [[TrailingCandidateHost alloc] initWithFrame:NSMakeRect(0, 0, 560, 36)];
     self.candidateHost.candidateScrubber = self.scrubber;
@@ -369,6 +373,7 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
 
 - (void)updateWithWords:(NSArray<NSString *> *)words keys:(NSArray<NSNumber *> *)keys {
     if ([self.currentWords isEqualToArray:words] && [self.currentKeys isEqualToArray:keys]) return;
+    [self setPressedCandidateIndexAndRefresh:NSNotFound];
     self.currentWords = [words copy]; self.currentKeys = [keys copy];
     if (words.count == 0) { if (!self.testing) [self dismissBar]; return; }
     // Match NSScrubberFlowLayout widths exactly so the whole group can be
@@ -423,7 +428,7 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     if (index >= 0 && index < (NSInteger)self.currentWords.count) {
         view.title = self.currentWords[index];
         // NSScrubber recycles its cells: style every time a cell is configured.
-        [view applyCandidateAppearanceAtIndex:index];
+        [view applyCandidateAppearanceAtIndex:index pressed:(index == self.pressedCandidateIndex)];
     }
     return view;
 }
@@ -435,6 +440,37 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     // minimum hit target, horizontal breathing room; long phrases cap to allow scrolling.
     return NSMakeSize(MIN(270.0, MAX(44.0, ceil(glyphWidth) + 26.0)), 36);
 }
+// Update only visible cells; reloading the scrubber would clear selection and
+// interrupt the user's finger tracking.
+- (void)setPressedCandidateIndexAndRefresh:(NSInteger)index {
+    if (self.pressedCandidateIndex == index) return;
+    NSInteger previous = self.pressedCandidateIndex;
+    self.pressedCandidateIndex = index;
+    for (NSNumber *number in @[@(previous), @(index)]) {
+        NSInteger i = number.integerValue;
+        if (i == NSNotFound || i < 0 || i >= (NSInteger)self.currentWords.count) continue;
+        CandidateItemView *view = (CandidateItemView *)[self.scrubber itemViewForItemAtIndex:i];
+        if ([view isKindOfClass:CandidateItemView.class]) {
+            [view applyCandidateAppearanceAtIndex:i pressed:(i == index)];
+        }
+    }
+}
+
+- (void)scrubber:(NSScrubber *)scrubber didHighlightItemAtIndex:(NSInteger)index {
+    (void)scrubber;
+    [self setPressedCandidateIndexAndRefresh:index];
+}
+
+- (void)didFinishInteractingWithScrubber:(NSScrubber *)scrubber {
+    (void)scrubber;
+    [self setPressedCandidateIndexAndRefresh:NSNotFound];
+}
+
+- (void)didCancelInteractingWithScrubber:(NSScrubber *)scrubber {
+    (void)scrubber;
+    [self setPressedCandidateIndexAndRefresh:NSNotFound];
+}
+
 - (void)scrubber:(NSScrubber *)scrubber didSelectItemAtIndex:(NSInteger)index {
     (void)scrubber;
     if (index < 0 || index >= (NSInteger)self.currentKeys.count || !AXIsProcessTrusted()) return;
