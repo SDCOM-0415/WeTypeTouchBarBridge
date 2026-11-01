@@ -30,7 +30,7 @@
 
 ## 运行环境
 
-- 带实体 Touch Bar 的 MacBook Pro（目前由项目使用者在 2018 款 Intel 机型上验证）。
+- 带实体 Touch Bar 的 MacBook Pro（目前在 2018 款 Intel 机型上验证）。
 - macOS Sequoia 已实测；其他系统版本需要自行验证。
 - 已安装并启用微信输入法（WeType），已知输入源标识：`com.tencent.inputmethod.wetype.pinyin`。
 - Xcode Command Line Tools（无需安装完整 Xcode）。
