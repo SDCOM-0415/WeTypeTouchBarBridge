@@ -164,6 +164,10 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     self.scrubber.delegate = self;
     self.scrubber.mode = NSScrubberModeFixed;
     self.scrubber.continuous = NO;
+    // Let NSScrubber draw native pressed/selected feedback for non-first candidates.
+    // The first candidate keeps its own static highlight; these decorations follow the actual touch.
+    self.scrubber.selectionBackgroundStyle = [NSScrubberSelectionStyle roundedBackgroundStyle];
+    self.scrubber.floatsSelectionViews = YES;
     [self.scrubber registerClass:CandidateItemView.class forItemIdentifier:@"candidateCell"];
     self.candidateHost = [[TrailingCandidateHost alloc] initWithFrame:NSMakeRect(0, 0, 560, 36)];
     self.candidateHost.candidateScrubber = self.scrubber;
