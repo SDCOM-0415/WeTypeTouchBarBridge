@@ -40,7 +40,7 @@
 
 ## 下载与安装（GitHub Releases）
 
-**v0.8 已发布！** 正式版本请优先前往 [GitHub Releases（最新版）](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases/latest)，也可以在 [全部 Releases](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases) 查看历史发布记录和更新说明。
+**v1.0 正式版已发布！** 正式版本请优先前往 [GitHub Releases（最新版）](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases/latest)，也可以在 [全部 Releases](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases) 查看历史发布记录和更新说明。
 
 | 设备架构 | 预期安装包名称 | 适用设备 |
 | --- | --- | --- |
@@ -51,7 +51,7 @@
 2. 在该 Release 的 **Assets** 中选择适合自己 Mac 架构的安装包（若发布者已附加）；注意 GitHub 自动生成的 **Source code** 压缩包仅包含源码，并非预编译 App。
 3. 解压获得 `WeTypeTouchBarBridge.app`，建议移动到 `/Applications` 后启动。
 4. 在「系统设置 → 隐私与安全性 → 辅助功能」中授予程序权限。输入拼音后，候选词会显示在 Touch Bar 上。
-5. 需要登录时启动时，可在菜单栏「候8」中自行启用该选项。
+5. 需要登录时启动时，可在菜单栏「候1」中自行启用该选项。
 
 如果某次 Release 尚未附上对应架构的预编译 ZIP，可在 [GitHub Actions 构建记录](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/actions/workflows/build.yml) 找到成功运行的 `x86_64` / `arm64` Artifacts，或按下文自行从源码编译。Actions Artifact 的保留期限有限，下载可能需要登录 GitHub。
 
@@ -91,9 +91,9 @@ build/WeTypeTouchBarBridge.app
 ./build/WeTypeTouchBarBridge.app/Contents/MacOS/WeTypeTouchBarBridge
 ```
 
-菜单栏出现「候8」表示辅助程序已启动。使用微信输入法输入拼音时，Touch Bar 会显示候选词。
+菜单栏出现「候1」表示辅助程序已启动。使用微信输入法输入拼音时，Touch Bar 会显示候选词。
 
-### 安装位置选择（v0.8）
+### 安装位置选择（v1.0 起支持）
 
 执行 `./build.sh` 后，脚本会交互式询问安装目标：
 
@@ -107,9 +107,9 @@ build/WeTypeTouchBarBridge.app
 
 建议选择 `/Applications`，避免移动已登记登录项的 App。已存在的同名应用仅在其 Bundle Identifier 与本项目一致时才会被替换；修改安装位置后应重新检查辅助功能及登录项授权。
 
-### 登录时自动启动（v0.8）
+### 登录时自动启动（v1.0 起支持）
 
-在菜单栏点击「候8」→「登录时启动」，程序使用 macOS 13+ 提供的 `SMAppService.mainAppService` 申请将当前 App 注册为登录项。
+在菜单栏点击「候1」→「登录时启动」，程序使用 macOS 13+ 提供的 `SMAppService.mainAppService` 申请将当前 App 注册为登录项。
 
 - 系统可能要求到「系统设置 → 通用 → 登录项与扩展」批准；你可以从菜单中的「打开登录项设置…」跳转。
 - 再次点击「登录时启动」可尝试取消注册。
