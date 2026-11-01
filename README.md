@@ -150,4 +150,4 @@ build/WeTypeTouchBarBridge.app
 
 ## 许可证
 
-本项目当前维护的代码采用 [GNU General Public License v3.0（GPL-3.0）](LICENSE) 授权。GPLv3 允许商业使用，但要求分发修改后的受保护程序时遵守相应的源码提供及相同许可证等义务。历史版本曾以 MIT License 发布；此次更换许可证不追溯撤销先前合法授予的 MIT 权利。
+本项目当前维护的代码采用 [GNU General Public License v3.0（GPL-3.0）](LICENSE) 授权。GPLv3 允许商业使用，但要求分发修改后的受保护程序时遵守相应的源码提供及相同许可证等义务。
