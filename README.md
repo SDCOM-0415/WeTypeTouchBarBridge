@@ -146,8 +146,8 @@ build/WeTypeTouchBarBridge.app
 | `Info.plist` | 应用包配置 |
 | `.github/workflows/build.yml` | 双架构 GitHub Actions 自动构建工作流 |
 | `docs/` | 实际运行截图 |
-| `LICENSE` | MIT 开源许可证 |
+| `LICENSE` | GNU GPLv3 开源许可证 |
 
 ## 许可证
 
-本项目使用 [MIT License](LICENSE)。
+本项目当前维护的代码采用 [GNU General Public License v3.0（GPL-3.0）](LICENSE) 授权。GPLv3 允许商业使用，但要求分发修改后的受保护程序时遵守相应的源码提供及相同许可证等义务。历史版本曾以 MIT License 发布；此次更换许可证不追溯撤销先前合法授予的 MIT 权利。
