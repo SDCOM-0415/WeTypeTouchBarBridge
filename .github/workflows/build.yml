@@ -1,4 +1,4 @@
-name: Build macOS Universal 2
+name: Build macOS (x86_64 / arm64)
 
 on:
   workflow_dispatch:
@@ -11,13 +11,20 @@ permissions:
 
 jobs:
   build:
-    name: Universal 2 (x86_64 + arm64)
+    name: Build ${{ matrix.arch }}
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [x86_64, arm64]
+
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Compile application for both architectures
+      - name: Compile for ${{ matrix.arch }}
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
         shell: bash
         run: |
           set -euo pipefail
@@ -25,7 +32,7 @@ jobs:
           BIN="$APP/Contents/MacOS/WeTypeTouchBarBridge"
           mkdir -p "$APP/Contents/MacOS"
 
-          xcrun clang -arch x86_64 -arch arm64 \
+          xcrun clang -arch "$TARGET_ARCH" \
             -fobjc-arc -fmodules -mmacosx-version-min=13.0 \
             -O2 -Wall -Wextra \
             -framework Cocoa \
@@ -38,25 +45,30 @@ jobs:
           codesign --force --sign - "$APP"
 
       - name: Verify architecture and signature
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
         shell: bash
         run: |
           set -euo pipefail
           APP="build/WeTypeTouchBarBridge.app"
           BIN="$APP/Contents/MacOS/WeTypeTouchBarBridge"
           lipo -info "$BIN"
-          lipo "$BIN" -verify_arch x86_64 arm64
+          ACTUAL_ARCHS="$(lipo -archs "$BIN")"
+          test "$ACTUAL_ARCHS" = "$TARGET_ARCH"
           codesign --verify --deep --strict --verbose=2 "$APP"
 
-      - name: Package application
+      - name: Package
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
         shell: bash
         run: |
           set -euo pipefail
           cd build
-          ditto -c -k --keepParent WeTypeTouchBarBridge.app WeTypeTouchBarBridge-Universal2.zip
+          ditto -c -k --keepParent WeTypeTouchBarBridge.app "WeTypeTouchBarBridge-${TARGET_ARCH}.zip"
 
-      - name: Upload build artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WeTypeTouchBarBridge-Universal2
-          path: build/WeTypeTouchBarBridge-Universal2.zip
+          name: WeTypeTouchBarBridge-${{ matrix.arch }}
+          path: build/WeTypeTouchBarBridge-${{ matrix.arch }}.zip
           if-no-files-found: error
