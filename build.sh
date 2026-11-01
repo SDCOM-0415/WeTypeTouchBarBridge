@@ -11,7 +11,7 @@ if ! xcrun --find clang >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "=== WeType Touch Bar Bridge v0.8 构建 ==="
+echo "=== WeType Touch Bar Bridge v1.0 构建 ==="
 echo "请选择 .app 安装位置："
 echo "  1. 应用程序文件夹（/Applications，默认）"
 echo "  2. ./build"
@@ -72,7 +72,7 @@ if [ "$TARGET_APP" != "$STAGED_APP" ]; then
 fi
 
 echo "安装位置：$TARGET_APP"
-echo "如需开机自启动：打开菜单栏「候8」→「登录时启动」，并根据 macOS 提示批准。"
+echo "如需开机自启动：打开菜单栏「候1」→「登录时启动」，并根据 macOS 提示批准。"
 echo "如首次使用，请在「系统设置 → 隐私与安全性 → 辅助功能」授权。"
 if ! open "$TARGET_APP"; then
   echo "Finder 启动失败，可直接运行："
