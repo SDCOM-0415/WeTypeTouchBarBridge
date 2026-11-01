@@ -129,7 +129,7 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     self.currentWords = @[];
     self.currentKeys = @[];
     self.status = [[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
-    self.status.button.title = @"候8";
+    self.status.button.title = @"候1";
     NSMenu *menu = [NSMenu new];
     NSMenuItem *toggle = [[NSMenuItem alloc] initWithTitle:@"暂停读取候选词" action:@selector(toggle:) keyEquivalent:@""];
     toggle.target = self;
@@ -154,7 +154,7 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     [menu addItem:quit];
     self.status.menu = menu;
     self.lastLogTime = NSProcessInfo.processInfo.systemUptime;
-    NSLog(@"[Perf] v0.8 started; use log stream to view [Perf] lines");
+    NSLog(@"[Perf] v1.0 started; use log stream to view [Perf] lines");
 
     self.pressedCandidateIndex = NSNotFound;
     self.candidateFont = [NSFont systemFontOfSize:15 weight:NSFontWeightRegular];
@@ -354,7 +354,7 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
         self.lastCandidateUpdate = [NSDate timeIntervalSinceReferenceDate];
         BOOL changed = ![self.currentWords isEqualToArray:snapshotWords] || ![self.currentKeys isEqualToArray:snapshotKeys];
         if (changed) {
-            [self updateDiagnosticMessage:[NSString stringWithFormat:@"v0.8 · %lu 候选 · AX %.1fms",(unsigned long)snapshotWords.count,axms]];
+            [self updateDiagnosticMessage:[NSString stringWithFormat:@"v1.0 · %lu 候选 · AX %.1fms",(unsigned long)snapshotWords.count,axms]];
         }
         const NSTimeInterval uiStart = NSProcessInfo.processInfo.systemUptime;
         [self updateWithWords:snapshotWords keys:snapshotKeys];
