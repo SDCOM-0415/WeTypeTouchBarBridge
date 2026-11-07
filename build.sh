@@ -11,7 +11,8 @@ if ! xcrun --find clang >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "=== WeType Touch Bar Bridge v1.0 构建 ==="
+APP_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist)
+echo "=== WeType Touch Bar Bridge v${APP_VERSION} 构建 ==="
 echo "请选择 .app 安装位置："
 echo "  1. 应用程序文件夹（/Applications，默认）"
 echo "  2. ./build"
