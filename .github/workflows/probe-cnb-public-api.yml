@@ -1,0 +1,39 @@
+name: Probe CNB Public Release API
+
+on:
+  push:
+    paths:
+      - '.github/workflows/probe-cnb-public-api.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe anonymous latest Release endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://api.cnb.cool/SDCOM/WeTypeTouchBarBridge/-/releases/latest"
+          status=$(curl --silent --show-error --location --max-time 15 -H 'Accept: application/vnd.cnb.api+json' -o /tmp/cnb-release.json -w '%{http_code}' "$url")
+          echo "HTTP $status"
+          python3 - <<'PY'
+          import json
+          try:
+              obj=json.load(open('/tmp/cnb-release.json'))
+              if isinstance(obj,dict):
+                  print('fields:',sorted(obj.keys()))
+                  print('tag_name:',obj.get('tag_name'))
+                  print('is_latest:',obj.get('is_latest'))
+                  print('assets:',[a.get('name') for a in obj.get('assets',[]) if isinstance(a,dict)])
+              else:
+                  print('response type:', type(obj).__name__)
+          except Exception as e:
+              print('Not JSON:',type(e).__name__)
+          PY
+          if [ "$status" != 200 ]; then
+            echo "::warning::CNB public Release API returned HTTP $status"
+          fi
