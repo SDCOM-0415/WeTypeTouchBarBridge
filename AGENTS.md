@@ -17,7 +17,7 @@
 | `main.m` | AppKit 菜单栏应用；WeType AX 候选词读取、Touch Bar 渲染、选词、诊断和登录项开关 |
 | `Info.plist` | Bundle Identifier、LSUIElement、应用版本等 |
 | `build.sh` | 交互式编译、签名、选择安装目录、启动 |
-| `.github/workflows/build.yml` | `macos-latest` 上分别编译 `x86_64` 和 `arm64` 两个 ZIP Artifact；手动执行可选择构建后发布 Release |
+| `.github/workflows/build.yml` | `macos-latest` 上分别编译 `x86_64` 和 `arm64` 两个 ZIP Artifact；版本分支 push 可自动发布新 Release，手动执行也可选择发布 |
 | `docs/` | 真实设备截图，勿用设计示意图替代实机验证 |
 | `README.md` | 中文用户文档、下载说明与已知限制 |
 
@@ -56,7 +56,8 @@ CI 维持两个独立的单架构构建，不要未经请求改成 Universal 2�
 - `lipo -archs "$BIN"` 应只返回当前矩阵指定架构；验证 `codesign --verify --deep --strict`。
 - 输出文件名必须分别为 `WeTypeTouchBarBridge-x86_64.zip` 和 `WeTypeTouchBarBridge-arm64.zip`。
 - CI 使用固定自签测试证书 `WeTypeTouchBarBridge Developer` 签名，并校验签名身份；本地 `build.sh` 则使用 ad-hoc 签名。两者均非 Apple Developer ID，也未公证，不可宣称绕过 Gatekeeper。变更签名路径时同步修改 README。GitHub Runner 无实体 Touch Bar，CI 成功不代表 UI 实机功能通过。
-- 手动 `workflow_dispatch` 默认仅构建；只有明确选择 `publish_release` 并填写与 `Info.plist` 匹配的版本标签时，才允许完成构建后发布 Release。发布两个直接包含 `.app` 的单层 ZIP 和 `SHA256SUMS`，不得覆盖已有 Release 或移动历史 Tag。普通 Tag push 仍只构建。
+- `vMAJOR.MINOR` / `vMAJOR.MINOR.PATCH` 版本分支 push 自动双架构构建，首次成功时创建同名 Tag 和 Release（标题即分支名）；后续更新该分支只构建新的 Actions Artifact，已有 Release 与 Tag 不可变。手动 `workflow_dispatch` 默认仅构建；显式启用 `publish_release` 才允许创建 Release。普通 Tag push 仍只构建。
+- 版本分支的 `Info.plist` 版本必须匹配分支名（两段 Tag 对应三段版本号补 `.0`），且分支本身须包含最新版 workflow；不为获得自动发布而改写历史分支或 Tag。只有两个架构都成功，才发布两个单层 ZIP 和 `SHA256SUMS`。
 
 修改前后至少运行或检查适用项：
 
@@ -88,7 +89,7 @@ macOS 上可进一步编译、运行 `codesign`、`lipo` 检查；需要 Touch B
 1. 先解释具体问题与受影响代码路径，优先做**最小可验证修改**，避免为 UI 微调重写可靠的 AX 或选词链路。
 2. 保持方法签名与 ObjC 属性 setter 不冲突（历史版本曾因 `setDiagnostic:` 冲突出现编译警告）；开启/认真处理 `-Wall -Wextra`。
 3. 修改版本号时保持 `Info.plist`、菜单栏版本标识、README 与 Release 说明一致；不要偷偷将历史 Tag 指向新代码。
-4. 修改 CI 时考虑 GitHub Actions 的事件/权限和 Artifact 过期机制；Release 仅允许手动选择发布模式，发布 Job 单独授予必要的 `contents: write`；不得未经授权自动发布、覆盖已有 Release 或移动历史 Tag。
+4. 修改 CI 时考虑 GitHub Actions 的事件/权限和 Artifact 过期机制；经仓库所有者授权，版本分支 push 可自动创建同名新 Release，手动发布需要明确选择发布模式；发布 Job 单独授予 `contents: write`。不得覆盖已有 Release 或移动历史 Tag。
 5. 提交应描述实际改动；在 PR/交付说明中区分 **静态检查、CI 编译、Intel 实机测试、Apple Silicon 实机测试** 四种不同的验证等级。
 6. 不添加未授权的依赖、数据采集、远程请求或静默自启动功能。
 
