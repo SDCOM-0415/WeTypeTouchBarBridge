@@ -1,0 +1,12 @@
+# CNB acts as a release mirror for GitHub-built macOS ZIPs.
+# The GitHub Actions workflow uploads binary assets; CNB never recompiles them.
+# Use overlay mode to avoid deleting an existing Release or its attachments.
+$:
+  tag_push:
+    - stages:
+        - name: Create matching CNB Release
+          type: git:release
+          options:
+            overlying: true
+            title: ${CNB_BRANCH}
+            description: "GitHub Release mirror. Binary assets are uploaded by GitHub Actions from the same signed build."
