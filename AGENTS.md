@@ -18,6 +18,7 @@
 | `Info.plist` | Bundle Identifier、LSUIElement、应用版本等 |
 | `build.sh` | 交互式编译、签名、选择安装目录、启动 |
 | `.github/workflows/build.yml` | `macos-latest` 上分别编译 `x86_64` 和 `arm64` 两个 ZIP Artifact；版本分支 push 可自动发布新 Release，手动执行也可选择发布 |
+| `.github/workflows/sync-cnb.yml` | 使用官方 git-sync 和完整 Git mirror 将全部分支、标签及历史同步到 CNB |
 | `docs/` | 真实设备截图，勿用设计示意图替代实机验证 |
 | `README.md` | 中文用户文档、下载说明与已知限制 |
 
@@ -67,6 +68,13 @@ plutil -lint Info.plist
 ```
 
 macOS 上可进一步编译、运行 `codesign`、`lipo` 检查；需要 Touch Bar 实机验证的变更必须明确标识「未实机验证」直至获得测试结果。无法使用 macOS SDK 的环境不应声称已通过 macOS 编译。
+
+## 版本检测与代码镜像
+
+- 每次启动异步查询公开的 GitHub Releases 最新版本，版本比较按数字段执行；默认每六小时复查一次，开关通过 `NSUserDefaults` 持久化，关闭自动检查也保留启动检查和手动检查。
+- 新版本提示采用与辅助功能提示相同的 `NSAlert` 外观；不得阻塞输入法轮询、自动安装软件或上传候选词。网络失败不得中断正常使用。
+- CNB 目标为 `https://cnb.cool/SDCOM/WeTypeTouchBarBridge.git`；使用官方 `docker://tencentcom/git-sync` 先行同步，容忍该步骤的首次失败；随后使用 `git clone --mirror` + `git push --mirror` 完整同步所有 Git 分支和标签。
+- 完整镜像为权威结果，不可将最终同步失败当作成功；使用 GitHub Secret `CNB_GIT_TOKEN`（HTTPS 用户名 `cnb`），未配置时跳过，不在仓库或日志中写入令牌。镜像会删除 CNB 独有的 Git refs，CNB 只作 GitHub 的单向镜像；不包含 Release 附件。
 
 ## 安装与安全规则
 
