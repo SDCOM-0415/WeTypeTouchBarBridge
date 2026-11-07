@@ -15,6 +15,7 @@
 | 路径 | 职责 |
 | --- | --- |
 | `main.m` | AppKit 菜单栏应用；WeType AX 候选词读取、Touch Bar 渲染、选词、诊断和登录项开关 |
+| `UpdateChecker.h` / `UpdateChecker.m` | 独立的 Release 版本检测模块，负责启动检查、六小时自动检查、设置持久化、网络请求和 NSAlert |
 | `Info.plist` | Bundle Identifier、LSUIElement、应用版本等 |
 | `build.sh` | 交互式编译、签名、选择安装目录、启动 |
 | `.github/workflows/build.yml` | `macos-latest` 上分别编译 `x86_64` 和 `arm64` 两个 ZIP Artifact；版本分支 push 可自动发布新 Release，手动执行也可选择发布 |
@@ -71,6 +72,7 @@ macOS 上可进一步编译、运行 `codesign`、`lipo` 检查；需要 Touch B
 
 ## 版本检测与代码镜像
 
+- 更新检测实现必须保留在独立的 `UpdateChecker.h` / `UpdateChecker.m`，不要把 NSURLSession、版本比较或更新提示再次塞回 `main.m`。本地与 CI 构建必须同时编译 `main.m` 和 `UpdateChecker.m`。
 - 每次启动异步查询公开的 GitHub Releases 最新版本，版本比较按数字段执行；默认每六小时复查一次，开关通过 `NSUserDefaults` 持久化，关闭自动检查也保留启动检查和手动检查。
 - 新版本提示采用与辅助功能提示相同的 `NSAlert` 外观；不得阻塞输入法轮询、自动安装软件或上传候选词。网络失败不得中断正常使用。
 - CNB 目标为 `https://cnb.cool/SDCOM/WeTypeTouchBarBridge.git`；使用官方 `docker://tencentcom/git-sync` 先行同步，容忍该步骤的首次失败；随后使用 `git clone --mirror` + `git push --mirror` 完整同步所有 Git 分支和标签。
