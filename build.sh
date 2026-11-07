@@ -47,7 +47,7 @@ mkdir -p "$STAGED_APP/Contents/MacOS"
 xcrun clang -fobjc-arc -fmodules -mmacosx-version-min=13.0 -O2 -Wall -Wextra \
   -framework Cocoa -framework ApplicationServices -framework Carbon \
   -framework ServiceManagement \
-  main.m -o "$STAGED_APP/Contents/MacOS/WeTypeTouchBarBridge"
+  main.m UpdateChecker.m -o "$STAGED_APP/Contents/MacOS/WeTypeTouchBarBridge"
 cp Info.plist "$STAGED_APP/Contents/Info.plist"
 codesign --force --sign - "$STAGED_APP"
 echo "构建完成：$STAGED_APP"
