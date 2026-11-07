@@ -7,7 +7,7 @@
 - 目标：为 macOS 微信输入法（WeType）提供接近系统原生拼音输入法体验的 Touch Bar 候选词显示与触摸选词能力。
 - 这是独立的菜单栏辅助程序，不是输入法插件；**不得修改、重签名、注入或替换 WeType.app**。
 - 已在 2018 款 Intel Touch Bar MacBook Pro + macOS Sequoia 上有用户实测；`arm64` 已完成 CI 编译验证，**不等于 Apple Silicon 实机功能已验证**。
-- 当前开发版本为 v1.1.1；历史正式版本含 v1.0、v1.1。默认分支 `main` 用于后续开发；历史 `v0.1`～`v0.8` 分支和同名 Tags 是版本快照。未经明确要求，不修改历史分支、移动 Tag 或重写历史。
+- 当前开发版本为 v1.1.2；历史正式版本含 v1.0、v1.1。默认分支 `main` 用于后续开发；历史 `v0.1`～`v0.8` 分支和同名 Tags 是版本快照。未经明确要求，不修改历史分支、移动 Tag 或重写历史。
 - 用户界面、README、诊断与使用说明以**简体中文**为主；代码中的变量/方法名遵循既有 Objective-C 约定。
 
 ## 代码结构
@@ -74,7 +74,7 @@ macOS 上可进一步编译、运行 `codesign`、`lipo` 检查；需要 Touch B
 ## 版本检测与代码镜像
 
 - 更新检测实现必须保留在独立的 `UpdateChecker.h` / `UpdateChecker.m`，不要把 NSURLSession、版本比较或更新提示再次塞回 `main.m`。本地与 CI 构建必须同时编译 `main.m` 和 `UpdateChecker.m`。
-- 每次启动匿名请求 CNB 官方公开 Release 徽章（SVG）取得版本号，CNB OpenAPI 不能匿名访问（401），不得在客户端内置访问令牌；，版本比较按数字段执行；默认每六小时复查一次，开关通过 `NSUserDefaults` 持久化，关闭自动检查也保留启动检查和手动检查。
+- 每次启动使用专门为公开客户端设计的仓库级只读 CNB 部署令牌访问 `/SDCOM/WeTypeTouchBarBridge/-/releases/latest`，解析 JSON 的 `tag_name`；令牌可被提取，禁止扩大权限或用于写入操作，版本比较按数字段执行；默认每六小时复查一次，开关通过 `NSUserDefaults` 持久化，关闭自动检查也保留启动检查和手动检查。
 - 新版本提示采用与辅助功能提示相同的 `NSAlert` 外观；不得阻塞输入法轮询、自动安装软件或上传候选词。网络失败不得中断正常使用。
 - CNB 目标为 `https://cnb.cool/SDCOM/WeTypeTouchBarBridge.git`；使用官方 `docker://tencentcom/git-sync` 先行同步，容忍该步骤的首次失败；随后使用 `git clone --mirror` + `git push --mirror` 完整同步所有 Git 分支和标签。
 - 完整镜像为权威结果，不可将最终同步失败当作成功；使用 GitHub Secret `CNB_GIT_TOKEN`（HTTPS 用户名 `cnb`），未配置时跳过，不在仓库或日志中写入令牌。镜像会删除 CNB 独有的 Git refs，CNB 只作 GitHub 的单向镜像；不包含 Release 附件。
