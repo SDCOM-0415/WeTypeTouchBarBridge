@@ -316,6 +316,9 @@ jobs:
         run: |
           set -euo pipefail
           : "${CNB_TOKEN:?Configure CNB_RELEASE_TOKEN with repo-contents:rw for CNB release attachments}"
+          # The CNB plugin currently emits a legacy "##[set-output FILES=...]"
+          # record that GitHub Actions rejects even after successful upload.
+          # Filter only that obsolete control line; pipefail preserves Docker failures.
           for attempt in $(seq 1 12); do
             if docker run --rm \
               -e CNB_TOKEN \
@@ -324,7 +327,7 @@ jobs:
               -e PLUGIN_TAG="$RELEASE_TAG" \
               -e PLUGIN_ATTACHMENTS="WeTypeTouchBarBridge-arm64.zip,WeTypeTouchBarBridge-x86_64.zip,SHA256SUMS" \
               -v "$PWD/release-files:/work:ro" -w /work \
-              cnbcool/attachments:latest; then
+              cnbcool/attachments:latest 2>&1 | sed -u '/^##\[set-output /d'; then
               echo "CNB Release attachments uploaded for $RELEASE_TAG"
               exit 0
             fi
