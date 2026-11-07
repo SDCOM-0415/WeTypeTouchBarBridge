@@ -1,13 +1,14 @@
 # CNB acts as a release mirror for GitHub-built macOS ZIPs.
 # The GitHub Actions workflow uploads binary assets; CNB never recompiles them.
-# Use overlay mode to avoid deleting an existing Release or its attachments.
+# tag_push creates a new version once. Never repush historical tags; the GitHub mirror
+# workflow verifies existing releases and does not overwrite their assets.
 $:
   tag_push:
     - stages:
         - name: Create matching CNB Release
           type: git:release
           options:
-            overlying: true
+            overlying: false
             latest: true
             latest: true
             preRelease: false
