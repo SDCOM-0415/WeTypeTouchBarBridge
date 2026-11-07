@@ -34,6 +34,15 @@ jobs:
           except Exception as e:
               print('Not JSON:',type(e).__name__)
           PY
+          for url in \
+            "https://api.cnb.cool/SDCOM/WeTypeTouchBarBridge/-/git/raw/main/README.md" \
+            "https://cnb.cool/SDCOM/WeTypeTouchBarBridge/-/raw/main/README.md" \
+            "https://cnb.cool/SDCOM/WeTypeTouchBarBridge/-/blob/main/README.md?raw=true" \
+            "https://cnb.cool/SDCOM/WeTypeTouchBarBridge/-/releases/tag/v1.1"; do
+            status=$(curl --silent --show-error --location --max-time 15 -o /tmp/cnb-probe-body -w '%{http_code}' "$url")
+            echo "ANONYMOUS GET $url -> HTTP $status"
+            echo "body prefix: $(head -c 100 /tmp/cnb-probe-body | tr '\n' ' ')"
+          done
           if [ "$status" != 200 ]; then
             echo "::warning::CNB public Release API returned HTTP $status"
           fi
