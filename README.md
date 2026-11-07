@@ -76,6 +76,23 @@
 
 正式发布时会直接上传 `WeTypeTouchBarBridge-x86_64.zip`、`WeTypeTouchBarBridge-arm64.zip` 和 `SHA256SUMS`。安装包 ZIP 内直接包含 `.app`，不再嵌套 Actions Artifact。签名采用固定自签测试证书，不等同于 Apple Developer ID 签名或公证；首次配置需提供仓库证书 Secrets。
 
+### CNB Release 安装包镜像
+
+新版本成功发布 GitHub Release 后，`build.yml` 还会运行 **Mirror published ZIPs to CNB Release**：重用这一次 macOS 双架构构建的 Artifacts，从 GitHub Release 下载原始 `SHA256SUMS` 并验证文件哈希；随后将同名 Tag 推送到 CNB。CNB 根目录的 [`.cnb.yml`](.cnb.yml) 使用官方 `git:release` 内置任务创建同名 Release（不重新编译），GitHub Actions 再运行官方 `cnbcool/attachments:latest` 容器上传 **x86_64 ZIP、arm64 ZIP 和 SHA256SUMS**。如果 CNB 的 Release 创建有延迟，上传任务会自动重试；最终同步失败会明确显示为 GitHub Actions 中 CNB 镜像任务失败，但不会删除已成功发布的 GitHub Release。
+
+CNB 附件使用 CNB OpenAPI 权限，与 Git 仓库 push 的权限是两回事。需要在 CNB 创建两个最小权限访问令牌（或一枚同时具有两项权限的令牌），分别配置 GitHub Actions Secrets：
+
+- `CNB_GIT_TOKEN`：`repo-code:rw`，允许推送 Tag 和其他 Git 引用；原先全量镜像已在使用。
+- `CNB_RELEASE_TOKEN`：`repo-contents:rw`，用于 CNB Release 附件上传。**只有 `repo-code:rw` 不够**。按照 [CNB 附件插件说明](https://cnb.cool/wmde/attachments) 配置。
+
+在你的 Mac 上交互式写入新令牌（不把令牌放到命令行参数或聊天中）：
+
+```bash
+gh secret set CNB_RELEASE_TOKEN --repo SDCOM-0415/WeTypeTouchBarBridge
+```
+
+目标仓库必须是 `SDCOM/WeTypeTouchBarBridge`，令牌需拥有该仓库相关权限。**CNB 镜像附件只针对新创建的 GitHub Release 运行**，不会覆盖已有版本，也不会自动补齐历史 Release。首次使用请从包含 `.cnb.yml` 的源码创建新版本分支并发布，历史标签的代码快照可能还没有这份 CNB 配置文件。CNB Git 镜像不包括 GitHub Release 附件，附件通过上述独立上传步骤传输。
+
 ## 自动检查更新
 
 更新检测逻辑独立放在 `UpdateChecker.h` / `UpdateChecker.m`，`main.m` 只负责初始化模块和接入菜单；本地 `build.sh` 与 GitHub Actions 均同时编译两个 Objective-C 源文件。
