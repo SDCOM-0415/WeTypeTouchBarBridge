@@ -2,6 +2,17 @@ name: Build macOS (x86_64 / arm64)
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: '构建成功后发布 GitHub Release？（默认仅构建）'
+        type: boolean
+        required: true
+        default: false
+      release_tag:
+        description: '发布时填写版本标签，例如 v1.1.0；仅构建时留空'
+        type: string
+        required: false
+        default: ''
   push:
     tags:
       - 'v*'
@@ -119,3 +130,78 @@ jobs:
             security delete-keychain "$SIGNING_KEYCHAIN" || true
           fi
           rm -f "$RUNNER_TEMP/wetype-signing.p12"
+
+  release:
+    name: Publish Release (explicit opt-in)
+    needs: build
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v4
+
+      - name: Validate release tag and app version
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tag must follow vMAJOR.MINOR.PATCH (e.g. v1.1.0)."
+            exit 1
+          fi
+          VERSION=$(python3 -c 'import plistlib; print(plistlib.load(open("Info.plist","rb"))["CFBundleShortVersionString"])')
+          if [[ "$RELEASE_TAG" != "v$VERSION" ]]; then
+            echo "::error::Tag $RELEASE_TAG does not match Info.plist version $VERSION."
+            exit 1
+          fi
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "::error::Release $RELEASE_TAG already exists; refusing to replace it."
+            exit 1
+          fi
+          REMOTE_SHA=$(git ls-remote --refs origin "refs/tags/$RELEASE_TAG" | cut -f1)
+          if [[ -n "$REMOTE_SHA" && "$REMOTE_SHA" != "$GITHUB_SHA" ]]; then
+            echo "::error::Tag already exists at a different commit; refusing to move it."
+            exit 1
+          fi
+
+      - name: Download both architecture artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: WeTypeTouchBarBridge-*
+          path: release-files
+          merge-multiple: true
+
+      - name: Verify release packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          for arch in x86_64 arm64; do
+            zip="release-files/WeTypeTouchBarBridge-${arch}.zip"
+            test -s "$zip" || { echo "::error::Missing $zip"; exit 1; }
+            unzip -t "$zip" >/dev/null
+            if ! unzip -Z -1 "$zip" | grep -q '^WeTypeTouchBarBridge.app/Contents/MacOS/WeTypeTouchBarBridge$'; then
+              echo "::error::Invalid app package: $zip"
+              exit 1
+            fi
+          done
+          sha256sum release-files/*.zip > release-files/SHA256SUMS
+
+      - name: Publish verified ZIPs directly (no nested archives)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            release-files/WeTypeTouchBarBridge-x86_64.zip \
+            release-files/WeTypeTouchBarBridge-arm64.zip \
+            release-files/SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$RELEASE_TAG" \
+            --generate-notes
