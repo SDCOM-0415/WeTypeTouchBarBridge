@@ -1,0 +1,41 @@
+name: Probe CNB updater API (temporary)
+
+on:
+  push:
+    paths:
+      - '.github/workflows/probe-cnb-updater.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check repository read-only token against latest Release API
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Extract the explicitly public, repository-scoped read-only credential
+          # from updater source. Never print the credential.
+          token=$(python3 -c 'import re; s=open("UpdateChecker.m").read(); print(re.search(r\x27kCNBReadToken = @"([^"]+)"\x27, s).group(1))')
+          url="https://api.cnb.cool/SDCOM/WeTypeTouchBarBridge/-/releases/latest"
+          status=$(curl -sS --max-time 20 -o /tmp/cnb-result.json -w '%{http_code}' \
+            -H "Authorization: Bearer $token" \
+            -H 'Accept: application/vnd.cnb.api+json' "$url")
+          unset token
+          echo "HTTP status: $status"
+          python3 - <<'PY'
+          import json
+          try:
+              d=json.load(open('/tmp/cnb-result.json'))
+              if isinstance(d,dict):
+                  print('response keys:', sorted(d.keys()))
+                  print('tag_name:',d.get('tag_name'))
+                  print('error code:',d.get('errcode'))
+                  print('error message:',d.get('errmsg'))
+          except Exception as e:
+              print('Invalid JSON:',type(e).__name__)
+          PY
+          test "$status" = 200
