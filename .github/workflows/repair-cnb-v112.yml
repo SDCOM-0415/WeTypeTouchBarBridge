@@ -1,0 +1,65 @@
+name: Complete CNB v1.1.2 mirror (one-time)
+on:
+  push:
+    paths: ['.github/workflows/repair-cnb-v112.yml']
+permissions:
+  contents: read
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download exactly the existing GitHub Release v1.1.2 assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-files
+          gh release download v1.1.2 --repo "$GITHUB_REPOSITORY" --dir release-files \
+            --pattern 'WeTypeTouchBarBridge-*.zip'
+          gh release download v1.1.2 --repo "$GITHUB_REPOSITORY" --dir release-files \
+            --pattern 'SHA256SUMS'
+          sha256sum -c release-files/SHA256SUMS
+
+      - name: Create missing CNB Release and mark latest
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_RELEASE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://api.cnb.cool/SDCOM/WeTypeTouchBarBridge/-/releases'
+          status=$(curl -sS -o "$RUNNER_TEMP/check.json" -w '%{http_code}' \
+            -H "Authorization: Bearer $CNB_TOKEN" \
+            -H 'Accept: application/vnd.cnb.api+json' \
+            "$url/tags/v1.1.2")
+          if [[ "$status" == 404 ]]; then
+            python3 - <<'PY' > "$RUNNER_TEMP/create.json"
+          import json
+          print(json.dumps({"tag_name":"v1.1.2", "target_commitish":"v1.1.2",
+                           "name":"v1.1.2", "draft":False, "prerelease":False,
+                           "make_latest":"true", "body":"Mirror of GitHub v1.1.2 Release."}))
+          PY
+            status=$(curl -sS -o "$RUNNER_TEMP/created.json" -w '%{http_code}' \
+              -X POST -H "Authorization: Bearer $CNB_TOKEN" \
+              -H 'Accept: application/vnd.cnb.api+json' -H 'Content-Type: application/json' \
+              --data-binary @"$RUNNER_TEMP/create.json" "$url")
+            echo "CNB create status: $status"
+            test "$status" = 201
+          else
+            echo "CNB existing Release status: $status"
+            test "$status" = 200
+          fi
+
+      - name: Upload existing verified ZIPs to CNB
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_RELEASE_TOKEN }}
+        run: |
+          set -euo pipefail
+          docker run --rm \
+            -e CNB_TOKEN -e CNB_API_ENDPOINT=https://api.cnb.cool \
+            -e CNB_REPO_SLUG=SDCOM/WeTypeTouchBarBridge \
+            -e PLUGIN_TAG=v1.1.2 \
+            -e PLUGIN_ATTACHMENTS='WeTypeTouchBarBridge-arm64.zip,WeTypeTouchBarBridge-x86_64.zip,SHA256SUMS' \
+            -v "$PWD/release-files:/work:ro" -w /work \
+            cnbcool/attachments:latest 2>&1 | sed -u '/^##\[set-output /d'
