@@ -7,7 +7,7 @@
 - 目标：为 macOS 微信输入法（WeType）提供接近系统原生拼音输入法体验的 Touch Bar 候选词显示与触摸选词能力。
 - 这是独立的菜单栏辅助程序，不是输入法插件；**不得修改、重签名、注入或替换 WeType.app**。
 - 已在 2018 款 Intel Touch Bar MacBook Pro + macOS Sequoia 上有用户实测；`arm64` 已完成 CI 编译验证，**不等于 Apple Silicon 实机功能已验证**。
-- 当前版本为 v0.8。默认分支 `main` 用于后续开发；历史 `v0.1`～`v0.8` 分支和同名 Tags 是版本快照。未经明确要求，不修改历史分支、移动 Tag 或重写历史。
+- 当前版本为 v1.0。默认分支 `main` 用于后续开发；历史 `v0.1`～`v0.8` 分支和同名 Tags 是版本快照。未经明确要求，不修改历史分支、移动 Tag 或重写历史。
 - 用户界面、README、诊断与使用说明以**简体中文**为主；代码中的变量/方法名遵循既有 Objective-C 约定。
 
 ## 代码结构
@@ -17,7 +17,7 @@
 | `main.m` | AppKit 菜单栏应用；WeType AX 候选词读取、Touch Bar 渲染、选词、诊断和登录项开关 |
 | `Info.plist` | Bundle Identifier、LSUIElement、应用版本等 |
 | `build.sh` | 交互式编译、签名、选择安装目录、启动 |
-| `.github/workflows/build.yml` | `macos-latest` 上分别编译 `x86_64` 和 `arm64` 两个 ZIP Artifact |
+| `.github/workflows/build.yml` | `macos-latest` 上分别编译 `x86_64` 和 `arm64` 两个 ZIP Artifact；手动执行可选择构建后发布 Release |
 | `docs/` | 真实设备截图，勿用设计示意图替代实机验证 |
 | `README.md` | 中文用户文档、下载说明与已知限制 |
 
@@ -55,7 +55,8 @@ CI 维持两个独立的单架构构建，不要未经请求改成 Universal 2�
 - `-mmacosx-version-min=13.0`；链接 `Cocoa`、`ApplicationServices`、`Carbon`、`ServiceManagement`。
 - `lipo -archs "$BIN"` 应只返回当前矩阵指定架构；验证 `codesign --verify --deep --strict`。
 - 输出文件名必须分别为 `WeTypeTouchBarBridge-x86_64.zip` 和 `WeTypeTouchBarBridge-arm64.zip`。
-- 仅构建和 ad-hoc 签名，不可宣称已使用 Developer ID 签名、公证或绕过 Gatekeeper。GitHub Runner 无实体 Touch Bar，CI 成功不代表 UI 实机功能通过。
+- CI 使用固定自签测试证书 `WeTypeTouchBarBridge Developer` 签名，并校验签名身份；本地 `build.sh` 则使用 ad-hoc 签名。两者均非 Apple Developer ID，也未公证，不可宣称绕过 Gatekeeper。变更签名路径时同步修改 README。GitHub Runner 无实体 Touch Bar，CI 成功不代表 UI 实机功能通过。
+- 手动 `workflow_dispatch` 默认仅构建；只有明确选择 `publish_release` 并填写与 `Info.plist` 匹配的版本标签时，才允许完成构建后发布 Release。发布两个直接包含 `.app` 的单层 ZIP 和 `SHA256SUMS`，不得覆盖已有 Release 或移动历史 Tag。普通 Tag push 仍只构建。
 
 修改前后至少运行或检查适用项：
 
@@ -87,7 +88,7 @@ macOS 上可进一步编译、运行 `codesign`、`lipo` 检查；需要 Touch B
 1. 先解释具体问题与受影响代码路径，优先做**最小可验证修改**，避免为 UI 微调重写可靠的 AX 或选词链路。
 2. 保持方法签名与 ObjC 属性 setter 不冲突（历史版本曾因 `setDiagnostic:` 冲突出现编译警告）；开启/认真处理 `-Wall -Wextra`。
 3. 修改版本号时保持 `Info.plist`、菜单栏版本标识、README 与 Release 说明一致；不要偷偷将历史 Tag 指向新代码。
-4. 修改 CI 时考虑 GitHub Actions 的事件/权限和 Artifact 过期机制；工作流不应自动发布 Release、覆盖 Tag 或提升令牌权限，除非用户明确要求。
+4. 修改 CI 时考虑 GitHub Actions 的事件/权限和 Artifact 过期机制；Release 仅允许手动选择发布模式，发布 Job 单独授予必要的 `contents: write`；不得未经授权自动发布、覆盖已有 Release 或移动历史 Tag。
 5. 提交应描述实际改动；在 PR/交付说明中区分 **静态检查、CI 编译、Intel 实机测试、Apple Silicon 实机测试** 四种不同的验证等级。
 6. 不添加未授权的依赖、数据采集、远程请求或静默自启动功能。
 
