@@ -1,7 +1,8 @@
 #import "UpdateChecker.h"
 
 static NSString *const kAutoCheckUpdatesKey = @"WTTBAutomaticallyCheckUpdates";
-static NSString *const kReleaseAPI = @"https://api.github.com/repos/SDCOM-0415/WeTypeTouchBarBridge/releases/latest";
+static NSString *const kReleaseBadge = @"https://cnb.cool/SDCOM/WeTypeTouchBarBridge/-/badge/release";
+static NSString *const kReleasePagePrefix = @"https://cnb.cool/SDCOM/WeTypeTouchBarBridge/-/releases/tag/";
 
 @interface UpdateChecker ()
 @property(nonatomic,strong) NSMenuItem *autoUpdateItem;
@@ -92,29 +93,38 @@ static BOOL isNewerRelease(NSString *remote, NSString *installed) {
 - (void)checkForUpdatesInformUserOnError:(BOOL)interactive {
     if (self.updateRequestInFlight) return;
     self.updateRequestInFlight = YES;
-    NSURL *url = [NSURL URLWithString:kReleaseAPI];
+    NSURL *url = [NSURL URLWithString:kReleaseBadge];
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
     request.timeoutInterval = 12;
-    [request setValue:@"application/vnd.github+json" forHTTPHeaderField:@"Accept"];
+    [request setValue:@"image/svg+xml" forHTTPHeaderField:@"Accept"];
     [request setValue:@"WeTypeTouchBarBridge-update-check" forHTTPHeaderField:@"User-Agent"];
     __weak UpdateChecker *weakSelf = self;
     NSURLSessionDataTask *task = [NSURLSession.sharedSession dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
             NSHTTPURLResponse *http = [response isKindOfClass:NSHTTPURLResponse.class] ?
                 (NSHTTPURLResponse *)response : nil;
-            NSDictionary *release = nil;
-            if (!error && http.statusCode == 200 && data.length > 0) {
-                id object = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
-                if ([object isKindOfClass:NSDictionary.class]) release = object;
+            // CNB OpenAPI requires authentication even for a public repository.
+            // Its official public Release badge is anonymous and contains the
+            // Latest version (or the most recently created Release).
+            NSString *tag = nil;
+            if (!error && http.statusCode == 200 && data.length > 0 && data.length < 131072) {
+                NSString *svg = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+                if ([svg containsString:@"<svg"]) {
+                    NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:
+                        @"(?<![A-Za-z0-9])v[0-9]+\\.[0-9]+(?:\\.[0-9]+)?(?![A-Za-z0-9])"
+                        options:0 error:NULL];
+                    NSTextCheckingResult *match = [re firstMatchInString:svg options:0
+                        range:NSMakeRange(0, svg.length)];
+                    if (match) tag = [svg substringWithRange:match.range];
+                }
             }
             dispatch_async(dispatch_get_main_queue(), ^{
                 UpdateChecker *strongSelf = weakSelf;
                 if (!strongSelf) return;
                 strongSelf.updateRequestInFlight = NO;
-                NSString *tag = [release[@"tag_name"] isKindOfClass:NSString.class] ? release[@"tag_name"] : nil;
-                NSString *link = [release[@"html_url"] isKindOfClass:NSString.class] ? release[@"html_url"] : nil;
+                NSString *link = tag ? [kReleasePagePrefix stringByAppendingString:tag] : nil;
                 NSString *installed = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"];
-                if (tag && link && [link hasPrefix:@"https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases/"] &&
+                if (tag && link &&
                     isNewerRelease(tag, installed)) {
                     // Avoid repeatedly opening the same modal alert within one application session.
                     if (![tag isEqualToString:strongSelf.lastNotifiedRelease]) {
@@ -122,16 +132,16 @@ static BOOL isNewerRelease(NSString *remote, NSString *installed) {
                         NSAlert *alert = [NSAlert new];
                         alert.messageText = @"发现新版本";
                         alert.informativeText = [NSString stringWithFormat:
-                            @"当前版本：%@\n最新版本：%@\n\n是否打开 GitHub Releases 下载？", installed ?: @"未知", tag];
+                            @"当前版本：%@\n最新版本：%@\n\n是否打开 CNB Releases 下载？", installed ?: @"未知", tag];
                         [alert addButtonWithTitle:@"前往下载"];
                         [alert addButtonWithTitle:@"稍后"];
                         if ([alert runModal] == NSAlertFirstButtonReturn)
                             [NSWorkspace.sharedWorkspace openURL:[NSURL URLWithString:link]];
                     }
                 } else if (interactive) {
-                    if (error || http.statusCode != 200 || !release || !tag || !installed) {
+                    if (error || http.statusCode != 200 || !tag || !installed) {
                         [strongSelf showInfo:@"检查更新失败" text:
-                            @"无法从 GitHub Releases 获取版本信息，请检查网络连接后重试。"];
+                            @"无法从 CNB 的公开 Release 徽章获取版本信息，请检查网络连接后重试。"];
                     } else {
                         [strongSelf showInfo:@"已经是最新版本" text:
                             [NSString stringWithFormat:@"当前版本：%@", installed]];
