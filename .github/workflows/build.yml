@@ -136,6 +136,9 @@ jobs:
   release:
     name: Publish version branch or manual Release
     needs: build
+    outputs:
+      release_published: ${{ steps.publish.outputs.published }}
+      release_tag: ${{ steps.publish.outputs.release_tag }}
     if: ${{ (github.event_name == 'push' && github.ref_type == 'branch') || (github.event_name == 'workflow_dispatch' && inputs.publish_release == true) }}
     runs-on: ubuntu-latest
     concurrency:
@@ -212,6 +215,7 @@ jobs:
           sha256sum release-files/*.zip > release-files/SHA256SUMS
 
       - name: Publish verified ZIPs directly (no nested archives)
+        id: publish
         if: ${{ steps.validate.outputs.skip_release != 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
@@ -227,3 +231,96 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "$RELEASE_TAG" \
             --generate-notes
+          echo "published=true" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+  cnb-release:
+    name: Mirror published ZIPs to CNB Release
+    needs: release
+    if: ${{ needs.release.outputs.release_published == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    concurrency:
+      group: cnb-release-${{ needs.release.outputs.release_tag }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout exact release commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Download the same GitHub build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: WeTypeTouchBarBridge-*
+          path: release-files
+          merge-multiple: true
+
+      - name: Verify the published payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release-files
+          for arch in arm64 x86_64; do
+            test -s "WeTypeTouchBarBridge-${arch}.zip"
+            unzip -t "WeTypeTouchBarBridge-${arch}.zip" >/dev/null
+          done
+          sha256sum -c SHA256SUMS
+
+      - name: Sync release tag to CNB before uploading
+        env:
+          CNB_GIT_TOKEN: ${{ secrets.CNB_GIT_TOKEN }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${CNB_GIT_TOKEN:?Configure CNB_GIT_TOKEN (repo-code:rw) to push the release tag}"
+          git fetch --no-tags origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          TAG_COMMIT=$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")
+          test "$TAG_COMMIT" = "$GITHUB_SHA" || {
+            echo "::error::Published tag does not match the built commit."
+            exit 1
+          }
+          ASKPASS="$RUNNER_TEMP/cnb-release-askpass.sh"
+          trap 'rm -f "$ASKPASS"' EXIT
+          cat > "$ASKPASS" <<'SH'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' cnb ;;
+            *Password*) printf '%s\n' "$CNB_GIT_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          SH
+          chmod 700 "$ASKPASS"
+          export GIT_ASKPASS="$ASKPASS" GIT_TERMINAL_PROMPT=0
+          git push https://cnb.cool/SDCOM/WeTypeTouchBarBridge.git \
+            "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+
+      - name: Upload three GitHub-built files to the CNB Release
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_RELEASE_TOKEN }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${CNB_TOKEN:?Configure CNB_RELEASE_TOKEN with repo-contents:rw for CNB release attachments}"
+          for attempt in $(seq 1 12); do
+            if docker run --rm \
+              -e CNB_TOKEN \
+              -e CNB_API_ENDPOINT=https://api.cnb.cool \
+              -e CNB_REPO_SLUG=SDCOM/WeTypeTouchBarBridge \
+              -e PLUGIN_TAG="$RELEASE_TAG" \
+              -e PLUGIN_ATTACHMENTS="WeTypeTouchBarBridge-arm64.zip,WeTypeTouchBarBridge-x86_64.zip,SHA256SUMS" \
+              -v "$PWD/release-files:/work:ro" -w /work \
+              cnbcool/attachments:latest; then
+              echo "CNB Release attachments uploaded for $RELEASE_TAG"
+              exit 0
+            fi
+            if [ "$attempt" -eq 12 ]; then
+              echo "::error::CNB Release upload failed after waiting for tag_push release creation."
+              exit 1
+            fi
+            sleep 15
+          done
