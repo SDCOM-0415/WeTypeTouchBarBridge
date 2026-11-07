@@ -258,16 +258,26 @@ jobs:
           path: release-files
           merge-multiple: true
 
+      - name: Download GitHub Release checksum manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern SHA256SUMS --dir release-files
+
       - name: Verify the published payload
         shell: bash
         run: |
           set -euo pipefail
-          cd release-files
           for arch in arm64 x86_64; do
-            test -s "WeTypeTouchBarBridge-${arch}.zip"
-            unzip -t "WeTypeTouchBarBridge-${arch}.zip" >/dev/null
+            test -s "release-files/WeTypeTouchBarBridge-${arch}.zip"
+            unzip -t "release-files/WeTypeTouchBarBridge-${arch}.zip" >/dev/null
           done
-          sha256sum -c SHA256SUMS
+          sha256sum -c release-files/SHA256SUMS
 
       - name: Sync release tag to CNB before uploading
         env:
