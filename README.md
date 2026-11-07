@@ -78,6 +78,8 @@
 
 ## 自动检查更新
 
+更新检测逻辑独立放在 `UpdateChecker.h` / `UpdateChecker.m`，`main.m` 只负责初始化模块和接入菜单；本地 `build.sh` 与 GitHub Actions 均同时编译两个 Objective-C 源文件。
+
 程序启动时会通过 GitHub Releases API 检查一次最新正式版；如果发现比本机版本更新的 Release，会以和辅助功能授权提示相同风格的 macOS `NSAlert` 提示，可选择「前往下载」或「稍后」。默认启用「自动检查更新（每 6 小时）」，可在菜单栏「候1」中切换开关（偏好设置会被保存），也可随时点击「立即检查更新」。
 
 关闭自动检查仅停止后续每 6 小时的轮询，**每次程序启动仍检查一次**；检查在后台异步执行，网络失败不会阻碍 Touch Bar 输入或自动安装任何内容。程序只请求公开的 GitHub Release 元数据，不上传候选词或输入内容。检测到同一新版本后，当前运行会话不会反复提示。未重新发布新版 App 之前，旧版二进制不会自动获得此功能。
@@ -185,6 +187,7 @@ build/WeTypeTouchBarBridge.app
 | 文件 | 用途 |
 | --- | --- |
 | `main.m` | Objective-C / AppKit 主程序 |
+| `UpdateChecker.h` / `UpdateChecker.m` | 独立的自动更新检测模块 |
 | `build.sh` | 一键构建与签名脚本 |
 | `Info.plist` | 应用包配置 |
 | `.github/workflows/build.yml` | 双架构 GitHub Actions 自动构建工作流 |
