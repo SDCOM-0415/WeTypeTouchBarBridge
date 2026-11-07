@@ -9,7 +9,7 @@ on:
         required: true
         default: false
       release_tag:
-        description: '发布时填写版本标签，例如 v1.1.0；仅构建时留空'
+        description: '发布时填写版本标签，例如 v1.1 或 v1.1.0；仅构建时留空'
         type: string
         required: false
         default: ''
@@ -149,13 +149,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Release tag must follow vMAJOR.MINOR.PATCH (e.g. v1.1.0)."
+          # Historical tags use vMAJOR.MINOR (e.g. v1.0), while
+          # CFBundleShortVersionString uses MAJOR.MINOR.PATCH (e.g. 1.0.0).
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Release tag must be vMAJOR.MINOR or vMAJOR.MINOR.PATCH."
             exit 1
           fi
           VERSION=$(python3 -c 'import plistlib; print(plistlib.load(open("Info.plist","rb"))["CFBundleShortVersionString"])')
-          if [[ "$RELEASE_TAG" != "v$VERSION" ]]; then
-            echo "::error::Tag $RELEASE_TAG does not match Info.plist version $VERSION."
+          NORMALIZED_TAG_VERSION="${RELEASE_TAG#v}"
+          if [[ "$NORMALIZED_TAG_VERSION" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            NORMALIZED_TAG_VERSION="$NORMALIZED_TAG_VERSION.0"
+          fi
+          if [[ "$NORMALIZED_TAG_VERSION" != "$VERSION" ]]; then
+            echo "::error::Tag $RELEASE_TAG resolves to $NORMALIZED_TAG_VERSION but Info.plist version is $VERSION."
             exit 1
           fi
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
