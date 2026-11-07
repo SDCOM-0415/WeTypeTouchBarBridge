@@ -76,6 +76,27 @@
 
 正式发布时会直接上传 `WeTypeTouchBarBridge-x86_64.zip`、`WeTypeTouchBarBridge-arm64.zip` 和 `SHA256SUMS`。安装包 ZIP 内直接包含 `.app`，不再嵌套 Actions Artifact。签名采用固定自签测试证书，不等同于 Apple Developer ID 签名或公证；首次配置需提供仓库证书 Secrets。
 
+## 自动检查更新
+
+程序启动时会通过 GitHub Releases API 检查一次最新正式版；如果发现比本机版本更新的 Release，会以和辅助功能授权提示相同风格的 macOS `NSAlert` 提示，可选择「前往下载」或「稍后」。默认启用「自动检查更新（每 6 小时）」，可在菜单栏「候1」中切换开关（偏好设置会被保存），也可随时点击「立即检查更新」。
+
+关闭自动检查仅停止后续每 6 小时的轮询，**每次程序启动仍检查一次**；检查在后台异步执行，网络失败不会阻碍 Touch Bar 输入或自动安装任何内容。程序只请求公开的 GitHub Release 元数据，不上传候选词或输入内容。检测到同一新版本后，当前运行会话不会反复提示。未重新发布新版 App 之前，旧版二进制不会自动获得此功能。
+
+## GitHub → CNB 全分支镜像
+
+新增工作流 [Mirror all Git refs to CNB](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/actions/workflows/sync-cnb.yml)，在 GitHub 推送任意分支、标签或版本构建工作流完成后自动执行，也支持手动触发。
+
+同步目标：[CNB / SDCOM / WeTypeTouchBarBridge](https://cnb.cool/SDCOM/WeTypeTouchBarBridge)。流程先尝试官方 `tencentcom/git-sync`（这一阶段允许失败），再根据 [CNB 迁移文档](https://docs.cnb.cool/zh/guide/migration-tools.html) 执行 `git clone --mirror` + `git push --mirror`，确保所有 Git 分支、标签和提交历史都同步。**以完整镜像推送为最终结果**；它会覆盖同名远端引用，并删除 CNB 中 GitHub 已不存在的引用。因此 CNB 仓库应作为只读镜像，不应独立维护分支或标签。GitHub Release 的二进制附件不属于 Git refs，不会随 Git 镜像一起迁移。
+
+配置之前，先在 CNB 创建目标仓库并生成对该仓库有写入权限的访问令牌，然后在本机执行：
+
+```bash
+# 在交互式提示中粘贴 CNB 访问令牌；不会显示在 shell 历史或终端输出中
+gh secret set CNB_GIT_TOKEN --repo SDCOM-0415/WeTypeTouchBarBridge
+```
+
+该令牌只保存在 GitHub Actions Secret 中，工作流通过 HTTPS 用户名 `cnb` 认证。**无需提供令牌给任何聊天机器人。** 未配置时同步工作流会跳过；配置后到 Actions 页面手动执行一次即可开始初次镜像。若官方 git-sync 第一次执行失败，继续尝试完整镜像；如果最终镜像失败，工作流仍会明确报错，不会把失败伪装成同步成功。
+
 ## 编译与启动
 
 克隆仓库：
