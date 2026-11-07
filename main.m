@@ -376,7 +376,7 @@ static BOOL isNewerRelease(NSString *remote, NSString *installed) {
                         NSAlert *alert = [NSAlert new];
                         alert.messageText = @"发现新版本";
                         alert.informativeText = [NSString stringWithFormat:
-                            @"当前版本：%@\\n最新版本：%@\\n\\n是否打开 GitHub Releases 下载？", installed ?: @"未知", tag];
+                            @"当前版本：%@\n最新版本：%@\n\n是否打开 GitHub Releases 下载？", installed ?: @"未知", tag];
                         [alert addButtonWithTitle:@"前往下载"];
                         [alert addButtonWithTitle:@"稍后"];
                         if ([alert runModal] == NSAlertFirstButtonReturn)
