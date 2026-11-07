@@ -40,7 +40,7 @@
 
 ## 下载与安装（GitHub Releases）
 
-**v1.0 已完成源码版本准备，正式发布后请前往** [GitHub Releases（最新版）](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases/latest)，也可以在 [全部 Releases](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases) 查看历史发布记录和更新说明。
+**v1.0 已发布，请前往** [GitHub Releases（最新版）](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases/latest)，也可以在 [全部 Releases](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases) 查看历史发布记录和更新说明。
 
 | 设备架构 | 预期安装包名称 | 适用设备 |
 | --- | --- | --- |
@@ -49,13 +49,24 @@
 
 1. 打开 [Releases](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/releases)，选择所需版本。
 2. 在该 Release 的 **Assets** 中选择适合自己 Mac 架构的安装包（若发布者已附加）；注意 GitHub 自动生成的 **Source code** 压缩包仅包含源码，并非预编译 App。
-3. 解压获得 `WeTypeTouchBarBridge.app`，建议移动到 `/Applications` 后启动。
+3. 新发布流程的 Release 安装 ZIP 解压一次即可得到 `WeTypeTouchBarBridge.app`，建议移动到 `/Applications` 后启动。历史版本的部分 Release 使用了 Actions Artifact 包装，可能需要解压两次。
 4. 在「系统设置 → 隐私与安全性 → 辅助功能」中授予程序权限。输入拼音后，候选词会显示在 Touch Bar 上。
 5. 需要登录时启动时，可在菜单栏「候1」中自行启用该选项。
 
 如果某次 Release 尚未附上对应架构的预编译 ZIP，可在 [GitHub Actions 构建记录](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/actions/workflows/build.yml) 找到成功运行的 `x86_64` / `arm64` Artifacts，或按下文自行从源码编译。Actions Artifact 的保留期限有限，下载可能需要登录 GitHub。
 
-**安全与兼容性：** 当前构建使用 ad-hoc 签名，未进行 Apple Developer ID 签名及公证，macOS 可能拦截启动；请仅在核对并信任项目来源后运行，不建议全局关闭 Gatekeeper。Intel Touch Bar Mac 已有实机验证，arm64 目前仅完成 CI 构建测试，尚未在 Apple Silicon Touch Bar 设备上验证。
+**安全与兼容性：** v0.8 的预编译包使用 ad-hoc 签名；v1.0 起的预编译包使用固定自签测试证书（WeTypeTouchBarBridge Developer）。本地 `build.sh` 仍使用 ad-hoc 签名。两种方式都不是 Apple Developer ID 签名，也没有进行 Apple 公证，macOS 可能拦截启动；请仅在核对并信任项目来源后运行，不建议全局关闭 Gatekeeper。Intel Touch Bar Mac 已有实机验证，arm64 目前仅完成 CI 构建测试，尚未在 Apple Silicon Touch Bar 设备上验证。
+
+## GitHub Actions 构建与发布
+
+在 [Build macOS 工作流](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/actions/workflows/build.yml) 点击 **Run workflow**，可以先选分支，再设置：
+
+- **publish_release**（默认 false）：关闭时仅构建两个架构并上传 Actions Artifacts；开启时，两个构建都成功并通过检查后，自动创建 GitHub Release。
+- **release_tag**：只有发布时填写，例如 `v1.1.0`。必须与所选分支 `Info.plist` 的 `CFBundleShortVersionString` 一致，且不得覆盖现有 Release。先在提交中更新版本号，再从目标提交所在分支触发发布。
+
+发布时上传 `WeTypeTouchBarBridge-x86_64.zip`、`WeTypeTouchBarBridge-arm64.zip` 和 `SHA256SUMS`。Release 的两个安装包是**直接包含 .app 的 ZIP**，无需再解包嵌套的 Actions Artifact；仅从 Actions 页面下载 Artifact 时仍会多一层打包。发布由明确选择触发，不会因为普通推送或标签推送自动创建 Release。
+
+构建使用固定自签测试证书以保持发布身份的一致性；签名不等于 Apple Developer ID 信任或公证。发版前须确保仓库已配置工作流需要的证书 Secrets。已有 Tag/Release 不应被覆盖或移动。
 
 ## 编译与启动
 
@@ -85,7 +96,7 @@ chmod +x build.sh
 build/WeTypeTouchBarBridge.app
 ```
 
-这是使用临时（ad-hoc）签名的实验性程序，**未经过 Apple 公证**。若 Finder 无法打开，可在确认并信任源码后从终端运行：
+本地 `build.sh` 生成的是使用临时（ad-hoc）签名的实验性程序，与 GitHub Release v1.0 起使用的固定自签测试证书不同；两者**都未经过 Apple 公证**。若 Finder 无法打开，可在确认并信任源码后从终端运行：
 
 ```bash
 ./build/WeTypeTouchBarBridge.app/Contents/MacOS/WeTypeTouchBarBridge
@@ -137,7 +148,7 @@ build/WeTypeTouchBarBridge.app
 - 触摸选词通过模拟数字键完成，不保证兼容所有输入场景。
 - 由于第三方跨进程读取、刷新和按键转发机制，候选词显示及触摸选词可能比输入法原生集成方案略有延迟，无法保证完全实时。
 - 辅助功能权限可能读取到正在输入的文字，请仅在信任本项目源码时授权，分享诊断日志前请检查隐私内容。
-- 项目已发布 GitHub Release；预编译构建采用 ad-hoc 签名、未经过 Apple 公证，也未做广泛机型验证。
+- 项目已发布 GitHub Release；v0.8 预编译包为 ad-hoc 签名，v1.0 起为固定自签测试证书签名，均未经 Apple 公证，也未做广泛机型验证。跨签名身份升级后可能需要重新授权辅助功能和登录项。
 - 候选栏是对 Apple 原生体验的复刻，并非系统自带输入法内部组件。
 
 ## 项目文件
