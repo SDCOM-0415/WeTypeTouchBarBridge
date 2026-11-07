@@ -44,11 +44,7 @@ jobs:
             echo "ANONYMOUS GET $url -> HTTP $status"
             echo "body prefix: $(head -c 350 /tmp/cnb-probe-body | tr '\n' ' ')"
             if [[ "$url" == *'/badge/release' ]]; then
-              python3 - <<'PY'
-              import re
-              svg = open('/tmp/cnb-probe-body', encoding='utf-8').read()
-              print('badge versions:', re.findall(r'(?<![A-Za-z0-9])v[0-9]+\\.[0-9]+(?:\\.[0-9]+)?(?![A-Za-z0-9])', svg))
-              PY
+              grep -oE 'v[0-9]+\\.[0-9]+(\\.[0-9]+)?' /tmp/cnb-probe-body | sort -u || true
             fi
           done
           if [ "$status" != 200 ]; then
