@@ -308,6 +308,52 @@ jobs:
           git push https://cnb.cool/SDCOM/WeTypeTouchBarBridge.git \
             "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
 
+      - name: Ensure matching CNB Release exists and is latest
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_RELEASE_TOKEN }}
+          RELEASE_TAG: ${{ needs.release.outputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${CNB_TOKEN:?Missing CNB_RELEASE_TOKEN}"
+          url="https://api.cnb.cool/SDCOM/WeTypeTouchBarBridge/-/releases"
+          status=$(curl --silent --show-error --retry 3 --output "$RUNNER_TEMP/cnb-release.json" \
+            --write-out '%{http_code}' \
+            -H "Authorization: Bearer $CNB_TOKEN" \
+            -H 'Accept: application/vnd.cnb.api+json' \
+            "$url/tags/$RELEASE_TAG")
+          if [[ "$status" == 404 ]]; then
+            export RELEASE_TAG GITHUB_SHA
+            python3 - <<'PY' > "$RUNNER_TEMP/cnb-create-release.json"
+          import json, os
+          print(json.dumps({
+              "tag_name": os.environ["RELEASE_TAG"],
+              "target_commitish": os.environ["GITHUB_SHA"],
+              "name": os.environ["RELEASE_TAG"],
+              "body": "Mirror of the GitHub release; binaries built and signed on GitHub Actions.",
+              "draft": False,
+              "prerelease": False,
+              "make_latest": "true"
+          }))
+          PY
+            create_status=$(curl --silent --show-error --output "$RUNNER_TEMP/cnb-create-result.json" \
+              --write-out '%{http_code}' \
+              -X POST -H "Authorization: Bearer $CNB_TOKEN" \
+              -H 'Accept: application/vnd.cnb.api+json' \
+              -H 'Content-Type: application/json' \
+              --data-binary @"$RUNNER_TEMP/cnb-create-release.json" "$url")
+            if [[ "$create_status" != 201 ]]; then
+              echo "::error::CNB Release create returned HTTP $create_status"
+              exit 1
+            fi
+            echo "Created CNB Release $RELEASE_TAG"
+          elif [[ "$status" == 200 ]]; then
+            echo "CNB Release already exists; preserving it"
+          else
+            echo "::error::CNB Release lookup returned HTTP $status"
+            exit 1
+          fi
+
       - name: Upload three GitHub-built files to the CNB Release
         env:
           CNB_TOKEN: ${{ secrets.CNB_RELEASE_TOKEN }}
