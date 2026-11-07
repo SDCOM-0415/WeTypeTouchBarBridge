@@ -9,6 +9,7 @@ $:
           options:
             overlying: true
             latest: true
+            latest: true
             preRelease: false
             # The default title is the triggering Git tag, matching GitHub.
             description: "GitHub Release mirror. Binary assets are uploaded by GitHub Actions from the same signed build."
