@@ -43,6 +43,13 @@ jobs:
             status=$(curl --silent --show-error --location --max-time 15 -o /tmp/cnb-probe-body -w '%{http_code}' "$url")
             echo "ANONYMOUS GET $url -> HTTP $status"
             echo "body prefix: $(head -c 350 /tmp/cnb-probe-body | tr '\n' ' ')"
+            if [[ "$url" == *'/badge/release' ]]; then
+              python3 - <<'PY'
+              import re
+              svg = open('/tmp/cnb-probe-body', encoding='utf-8').read()
+              print('badge versions:', re.findall(r'(?<![A-Za-z0-9])v[0-9]+\\.[0-9]+(?:\\.[0-9]+)?(?![A-Za-z0-9])', svg))
+              PY
+            fi
           done
           if [ "$status" != 200 ]; then
             echo "::warning::CNB public Release API returned HTTP $status"
