@@ -159,7 +159,8 @@ static BOOL isDigitLabel(NSString *s, NSInteger *out) {
     [menu addItem:quit];
     self.status.menu = menu;
     self.lastLogTime = NSProcessInfo.processInfo.systemUptime;
-    NSLog(@"[Perf] v1.0 started; use log stream to view [Perf] lines");
+    NSLog(@"[Perf] v%@ started; use log stream to view [Perf] lines",
+          [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleShortVersionString"]);
 
     self.pressedCandidateIndex = NSNotFound;
     self.candidateFont = [NSFont systemFontOfSize:15 weight:NSFontWeightRegular];
