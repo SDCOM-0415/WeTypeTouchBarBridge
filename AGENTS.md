@@ -20,6 +20,7 @@
 | `build.sh` | 交互式编译、签名、选择安装目录、启动 |
 | `.github/workflows/build.yml` | `macos-latest` 上分别编译 `x86_64` 和 `arm64` 两个 ZIP Artifact；版本分支 push 可自动发布新 Release，手动执行也可选择发布 |
 | `.github/workflows/sync-cnb.yml` | 使用官方 git-sync 和完整 Git mirror 将全部分支、标签及历史同步到 CNB |
+| `.cnb.yml` | 在 CNB 收到新的 Tag 后用 `git:release` 创建同名 Release，不重复编译 macOS App |
 | `docs/` | 真实设备截图，勿用设计示意图替代实机验证 |
 | `README.md` | 中文用户文档、下载说明与已知限制 |
 
@@ -77,6 +78,7 @@ macOS 上可进一步编译、运行 `codesign`、`lipo` 检查；需要 Touch B
 - 新版本提示采用与辅助功能提示相同的 `NSAlert` 外观；不得阻塞输入法轮询、自动安装软件或上传候选词。网络失败不得中断正常使用。
 - CNB 目标为 `https://cnb.cool/SDCOM/WeTypeTouchBarBridge.git`；使用官方 `docker://tencentcom/git-sync` 先行同步，容忍该步骤的首次失败；随后使用 `git clone --mirror` + `git push --mirror` 完整同步所有 Git 分支和标签。
 - 完整镜像为权威结果，不可将最终同步失败当作成功；使用 GitHub Secret `CNB_GIT_TOKEN`（HTTPS 用户名 `cnb`），未配置时跳过，不在仓库或日志中写入令牌。镜像会删除 CNB 独有的 Git refs，CNB 只作 GitHub 的单向镜像；不包含 Release 附件。
+- GitHub Release 发布完成后，`cnb-release` 使用同次构建的 ZIP 和 GitHub SHA256SUMS 验证后推送同名 Tag 到 CNB，等待 `.cnb.yml` 中的 `git:release`，再用 `cnbcool/attachments:latest` 上传三份文件。使用单独 GitHub Secret `CNB_RELEASE_TOKEN`（CNB `repo-contents:rw`）；`CNB_GIT_TOKEN` 需要 `repo-code:rw`。CNB 镜像上传失败不得删除 GitHub Release，不得重新编译或替换原 ZIP。
 
 ## 安装与安全规则
 
