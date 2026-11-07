@@ -62,7 +62,7 @@
 在 [Build macOS 工作流](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/actions/workflows/build.yml) 点击 **Run workflow**，可以先选分支，再设置：
 
 - **publish_release**（默认 false）：关闭时仅构建两个架构并上传 Actions Artifacts；开启时，两个构建都成功并通过检查后，自动创建 GitHub Release。
-- **release_tag**：只有发布时填写，例如 `v1.1.0`。必须与所选分支 `Info.plist` 的 `CFBundleShortVersionString` 一致，且不得覆盖现有 Release。先在提交中更新版本号，再从目标提交所在分支触发发布。
+- **release_tag**：只有发布时填写，例如 `v1.1` 或 `v1.1.0`。两段版本标签会按补零规则匹配 `Info.plist`（如 `v1.1` 对应 `1.1.0`），且不得覆盖现有 Release。先在提交中更新版本号，再从目标提交所在分支触发发布。
 
 发布时上传 `WeTypeTouchBarBridge-x86_64.zip`、`WeTypeTouchBarBridge-arm64.zip` 和 `SHA256SUMS`。Release 的两个安装包是**直接包含 .app 的 ZIP**，无需再解包嵌套的 Actions Artifact；仅从 Actions 页面下载 Artifact 时仍会多一层打包。发布由明确选择触发，不会因为普通推送或标签推送自动创建 Release。
 
