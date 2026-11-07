@@ -59,14 +59,22 @@
 
 ## GitHub Actions 构建与发布
 
-在 [Build macOS 工作流](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/actions/workflows/build.yml) 点击 **Run workflow**，可以先选分支，再设置：
+### 版本分支自动发布
 
-- **publish_release**（默认 false）：关闭时仅构建两个架构并上传 Actions Artifacts；开启时，两个构建都成功并通过检查后，自动创建 GitHub Release。
-- **release_tag**：只有发布时填写，例如 `v1.1` 或 `v1.1.0`。两段版本标签会按补零规则匹配 `Info.plist`（如 `v1.1` 对应 `1.1.0`），且不得覆盖现有 Release。先在提交中更新版本号，再从目标提交所在分支触发发布。
+从包含当前工作流的 `main` 创建 `v1.1`、`v1.1.0` 等版本分支并推送时，Actions 会自动构建 `x86_64` 和 `arm64`。两个架构构建成功且版本校验通过后，自动创建**与分支同名**的 Git Tag 和 GitHub Release，Release 标题也是完整分支名（如 `v1.1`），无需手动填写 Tag。标签支持两段或三段版本号，`v1.1` 对应 `Info.plist` 中的 `1.1.0`。
 
-发布时上传 `WeTypeTouchBarBridge-x86_64.zip`、`WeTypeTouchBarBridge-arm64.zip` 和 `SHA256SUMS`。Release 的两个安装包是**直接包含 .app 的 ZIP**，无需再解包嵌套的 Actions Artifact；仅从 Actions 页面下载 Artifact 时仍会多一层打包。发布由明确选择触发，不会因为普通推送或标签推送自动创建 Release。
+版本分支之后再次推送时仍会构建并上传新的 Actions Artifacts，**但已有 Tag / Release 保持不可变，不自动覆盖已发布资产**。要发布新的正式版本，请创建新的版本分支并调整 `Info.plist` 版本。若已有同名 Tag 但未创建 Release，只有该 Tag 指向本次构建的同一提交时才允许补发。标签推送仍只构建，不会重复触发发布。
 
-构建使用固定自签测试证书以保持发布身份的一致性；签名不等于 Apple Developer ID 信任或公证。发版前须确保仓库已配置工作流需要的证书 Secrets。已有 Tag/Release 不应被覆盖或移动。
+**注意：** 触发 `push` 工作流的版本分支本身必须包含新版 `.github/workflows/build.yml`。过去的历史版本分支未必有此文件配置，不会因为仅修改 `main` 就自动获得新的触发行为；不要为此改写已发布的历史分支或标签。
+
+### 手动构建与发布
+
+在 [Build macOS 工作流](https://github.com/SDCOM-0415/WeTypeTouchBarBridge/actions/workflows/build.yml) 点击 **Run workflow**：
+
+- **publish_release**（默认 false）：仅构建两个架构并上传 Actions Artifacts；勾选后在成功构建、版本校验和产物校验通过时发布 Release。
+- **release_tag**：手动发布时填写，如 `v1.1` 或 `v1.1.0`，版本必须匹配当前分支的 `Info.plist`。
+
+正式发布时会直接上传 `WeTypeTouchBarBridge-x86_64.zip`、`WeTypeTouchBarBridge-arm64.zip` 和 `SHA256SUMS`。安装包 ZIP 内直接包含 `.app`，不再嵌套 Actions Artifact。签名采用固定自签测试证书，不等同于 Apple Developer ID 签名或公证；首次配置需提供仓库证书 Secrets。
 
 ## 编译与启动
 
