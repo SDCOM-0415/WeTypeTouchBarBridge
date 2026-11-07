@@ -52,7 +52,7 @@ jobs:
             -framework ApplicationServices \
             -framework Carbon \
             -framework ServiceManagement \
-            main.m -o "$BIN"
+            main.m UpdateChecker.m -o "$BIN"
 
           cp Info.plist "$APP/Contents/Info.plist"
 
