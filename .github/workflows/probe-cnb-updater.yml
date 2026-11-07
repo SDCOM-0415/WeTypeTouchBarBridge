@@ -19,7 +19,8 @@ jobs:
           set -euo pipefail
           # Extract the explicitly public, repository-scoped read-only credential
           # from updater source. Never print the credential.
-          token=$(python3 -c 'import re; s=open("UpdateChecker.m").read(); print(re.search(r\x27kCNBReadToken = @"([^"]+)"\x27, s).group(1))')
+          token=$(sed -n 's/.*kCNBReadToken = @"\([^"]*\)".*/\1/p' UpdateChecker.m | head -n 1)
+          test -n "$token"
           url="https://api.cnb.cool/SDCOM/WeTypeTouchBarBridge/-/releases/latest"
           status=$(curl -sS --max-time 20 -o /tmp/cnb-result.json -w '%{http_code}' \
             -H "Authorization: Bearer $token" \
