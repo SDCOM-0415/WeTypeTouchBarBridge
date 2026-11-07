@@ -101,16 +101,13 @@ static BOOL isNewerRelease(NSString *remote, NSString *installed) {
     request.timeoutInterval = 12;
     [request setValue:@"application/vnd.cnb.api+json" forHTTPHeaderField:@"Accept"];
     [request setValue:[@"Bearer " stringByAppendingString:kCNBReadToken] forHTTPHeaderField:@"Authorization"];
-    [request setValue:@"image/svg+xml" forHTTPHeaderField:@"Accept"];
     [request setValue:@"WeTypeTouchBarBridge-update-check" forHTTPHeaderField:@"User-Agent"];
     __weak UpdateChecker *weakSelf = self;
     NSURLSessionDataTask *task = [NSURLSession.sharedSession dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
             NSHTTPURLResponse *http = [response isKindOfClass:NSHTTPURLResponse.class] ?
                 (NSHTTPURLResponse *)response : nil;
-            // CNB OpenAPI requires authentication even for a public repository.
-            // Its official public Release badge is anonymous and contains the
-            // Latest version (or the most recently created Release).
+            // Parse the authenticated CNB Release JSON response.
             NSString *tag = nil;
             if (!error && http.statusCode == 200 && data.length > 0 && data.length < 131072) {
                 id result = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
