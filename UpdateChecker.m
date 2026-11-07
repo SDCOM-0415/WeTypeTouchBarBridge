@@ -1,7 +1,10 @@
 #import "UpdateChecker.h"
 
 static NSString *const kAutoCheckUpdatesKey = @"WTTBAutomaticallyCheckUpdates";
-static NSString *const kReleaseBadge = @"https://cnb.cool/SDCOM/WeTypeTouchBarBridge/-/badge/release";
+// Public client token: repository-scoped, read-only, deliberately distributed with this app.
+// Treat it as non-secret, never upgrade its permissions or reuse it for CI writes.
+static NSString *const kCNBReadToken = @"aQxLyJUxPFG3969RLP7fj3HHbYF";
+static NSString *const kReleaseAPI = @"https://api.cnb.cool/SDCOM/WeTypeTouchBarBridge/-/releases/latest";
 static NSString *const kReleasePagePrefix = @"https://cnb.cool/SDCOM/WeTypeTouchBarBridge/-/releases/tag/";
 
 @interface UpdateChecker ()
@@ -93,9 +96,11 @@ static BOOL isNewerRelease(NSString *remote, NSString *installed) {
 - (void)checkForUpdatesInformUserOnError:(BOOL)interactive {
     if (self.updateRequestInFlight) return;
     self.updateRequestInFlight = YES;
-    NSURL *url = [NSURL URLWithString:kReleaseBadge];
+    NSURL *url = [NSURL URLWithString:kReleaseAPI];
     NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:url];
     request.timeoutInterval = 12;
+    [request setValue:@"application/vnd.cnb.api+json" forHTTPHeaderField:@"Accept"];
+    [request setValue:[@"Bearer " stringByAppendingString:kCNBReadToken] forHTTPHeaderField:@"Authorization"];
     [request setValue:@"image/svg+xml" forHTTPHeaderField:@"Accept"];
     [request setValue:@"WeTypeTouchBarBridge-update-check" forHTTPHeaderField:@"User-Agent"];
     __weak UpdateChecker *weakSelf = self;
@@ -108,14 +113,11 @@ static BOOL isNewerRelease(NSString *remote, NSString *installed) {
             // Latest version (or the most recently created Release).
             NSString *tag = nil;
             if (!error && http.statusCode == 200 && data.length > 0 && data.length < 131072) {
-                NSString *svg = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-                if ([svg containsString:@"<svg"]) {
-                    NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:
-                        @"(?<![A-Za-z0-9])v[0-9]+\\.[0-9]+(?:\\.[0-9]+)?(?![A-Za-z0-9])"
-                        options:0 error:NULL];
-                    NSTextCheckingResult *match = [re firstMatchInString:svg options:0
-                        range:NSMakeRange(0, svg.length)];
-                    if (match) tag = [svg substringWithRange:match.range];
+                id result = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+                if ([result isKindOfClass:NSDictionary.class]) {
+                    id value = ((NSDictionary *)result)[@"tag_name"];
+                    if ([value isKindOfClass:NSString.class] && releaseVersionComponents(value))
+                        tag = value;
                 }
             }
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -141,7 +143,7 @@ static BOOL isNewerRelease(NSString *remote, NSString *installed) {
                 } else if (interactive) {
                     if (error || http.statusCode != 200 || !tag || !installed) {
                         [strongSelf showInfo:@"检查更新失败" text:
-                            @"无法从 CNB 的公开 Release 徽章获取版本信息，请检查网络连接后重试。"];
+                            @"无法从 CNB Release API 获取版本信息，请检查网络或令牌状态后重试。"];
                     } else {
                         [strongSelf showInfo:@"已经是最新版本" text:
                             [NSString stringWithFormat:@"当前版本：%@", installed]];
