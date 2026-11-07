@@ -8,5 +8,5 @@ $:
           type: git:release
           options:
             overlying: true
-            title: ${CNB_BRANCH}
+            # The default title is the triggering Git tag, matching GitHub.
             description: "GitHub Release mirror. Binary assets are uploaded by GitHub Actions from the same signed build."
