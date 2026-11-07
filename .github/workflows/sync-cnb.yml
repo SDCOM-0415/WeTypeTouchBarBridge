@@ -1,0 +1,87 @@
+name: Mirror all Git refs to CNB
+
+on:
+  push:
+  workflow_dispatch:
+  workflow_run:
+    workflows:
+      - "Build macOS (x86_64 / arm64)"
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cnb-full-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    if: ${{ github.repository == 'SDCOM-0415/WeTypeTouchBarBridge' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check CNB credentials
+        id: credentials
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_GIT_TOKEN }}
+        shell: bash
+        run: |
+          if [[ -n "$CNB_TOKEN" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::CNB_GIT_TOKEN not configured. Mirror skipped until credentials are added."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout for official git-sync
+        if: ${{ steps.credentials.outputs.available == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Official CNB git-sync plugin performs the triggering ref's sync.
+      # Its first-run failure is tolerated; the complete mirror below is authoritative.
+      - name: CNB official git-sync (best effort)
+        if: ${{ steps.credentials.outputs.available == 'true' }}
+        continue-on-error: true
+        uses: docker://tencentcom/git-sync
+        env:
+          PLUGIN_TARGET_URL: https://cnb.cool/SDCOM/WeTypeTouchBarBridge.git
+          PLUGIN_AUTH_TYPE: https
+          PLUGIN_USERNAME: cnb
+          PLUGIN_PASSWORD: ${{ secrets.CNB_GIT_TOKEN }}
+          PLUGIN_FORCE: 'true'
+
+      - name: Mirror all branches, tags and history (authoritative)
+        if: ${{ steps.credentials.outputs.available == 'true' }}
+        env:
+          CNB_TOKEN: ${{ secrets.CNB_GIT_TOKEN }}
+          SOURCE_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/cnb-mirror"
+          cd "$RUNNER_TEMP/cnb-mirror"
+
+          # A mirror clone preserves every Git branch, tag and commit; checkout alone
+          # does not include all branches in a pushable form.
+          git clone --mirror "https://github.com/$SOURCE_REPOSITORY.git" repository.git
+          cd repository.git
+
+          ASKPASS="$RUNNER_TEMP/cnb-mirror/askpass.sh"
+          cat > "$ASKPASS" <<'SH'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' cnb ;;
+            *Password*) printf '%s\n' "$CNB_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          SH
+          chmod 700 "$ASKPASS"
+          export GIT_ASKPASS="$ASKPASS" GIT_TERMINAL_PROMPT=0
+
+          # Intentionally mirrors deletions as well. CNB is a destination-only mirror.
+          git push --mirror https://cnb.cool/SDCOM/WeTypeTouchBarBridge.git
+          rm -f "$ASKPASS"
