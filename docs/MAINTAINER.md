@@ -53,3 +53,7 @@ gh secret set CNB_GIT_TOKEN --repo SDCOM-0415/WeTypeTouchBarBridge
 
 该令牌只保存在 GitHub Actions Secret 中，工作流通过 HTTPS 用户名 `cnb` 认证。**无需提供令牌给任何聊天机器人。** 未配置时同步工作流会跳过；配置后到 Actions 页面手动执行一次即可开始初次镜像。若官方 git-sync 第一次执行失败，继续尝试完整镜像；如果最终镜像失败，工作流仍会明确报错，不会把失败伪装成同步成功。
 
+
+## 历史 AX 调试脚本
+
+项目初期用于探索微信输入法辅助功能树的三个原始 Swift 测试脚本已归档于 [`tools/ax/`](../tools/ax/README.md)。包括一次性 AX 树探测、300ms 早期监测以及 100ms 候选变化与耗时统计，**不参与正式构建**。
